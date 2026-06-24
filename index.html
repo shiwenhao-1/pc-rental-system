@@ -10,7 +10,7 @@
     * { box-sizing: border-box; margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
     body { background: #f5f7fb; padding: 16px 12px; min-height: 100vh; }
     .app-container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); overflow: hidden; padding: 20px 18px; position: relative; min-height: 500px; }
-    .login-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: white; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    .login-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: white; display: flex; align-items: center; justify-content: center; flex-direction: column; z-index: 10; }
     .login-box { background: #f8fafc; padding: 40px; border-radius: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; }
     .login-box input { display: block; width: 250px; padding: 12px 20px; margin: 10px auto; border-radius: 30px; border: 1px solid #cbd5e1; font-size: 1rem; }
     .quote-panel { display: flex; flex-direction: column; gap: 6px; }
@@ -30,6 +30,8 @@
     .btn-primary { background: #1e293b; border-color: #1e293b; color: white; }
     .btn-success { background: #10b981; border-color: #10b981; color: white; }
     .warning-tip { background: #fef9c3; padding: 8px 16px; border-radius: 30px; color: #854d0e; }
+    .error-tip { background: #fee2e2; padding: 12px 16px; border-radius: 20px; color: #991b1b; margin-bottom: 12px; }
+    .loading-tip { background: #dbeafe; padding: 12px 16px; border-radius: 20px; color: #1e40af; margin-bottom: 12px; }
     .flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
@@ -62,10 +64,14 @@
   </div>
 
   <div v-if="isLoggedIn">
+    <div v-if="dataStatus === 'loading'" class="loading-tip">⏳ 正在加载配件数据...</div>
+    <div v-if="dataStatus === 'error'" class="error-tip">❌ 配件数据加载失败，请检查网络或刷新页面重试</div>
+
     <div class="reset-btn-container">
       <button class="btn btn-success" @click="showQuoteModal = true">📋 生成报价单</button>
       <button class="btn btn-primary" @click="resetAllSelections">🔄 重新报价</button>
     </div>
+    
     <div class="quote-panel">
       <div v-for="cat in quoteCategories" :key="cat.id" class="selector-row">
         <div class="selector-label">{{ cat.label }}</div>
@@ -128,8 +134,8 @@
 <script>
   const { createApp, ref, reactive, computed } = Vue;
 
-  // ===== 配置区 =====
-  const API_BASE = 'https://xszd.cc.cd'; // 替换为你的 Worker 域名
+  // ===== 配置区（必须与后台完全一致）=====
+  const API_BASE = 'https://pc-rental-all.3354843538.workers.dev';
 
   const defaultCategories = [
     { id: 'cpu', name: 'CPU', label: 'CPU' }, { id: 'gpu', name: '显卡', label: '显卡' },
@@ -146,12 +152,13 @@
       const loginUsername = ref('');
       const loginPassword = ref('');
       const loginError = ref('');
+      const dataStatus = ref('idle'); // idle / loading / error
 
       const autoMatchMessage = ref('');
       const showQuoteModal = ref(false);
       const quoteModalContent = ref(null);
       const allCategories = ref(defaultCategories);
-      const itemsData = reactive({});
+      const itemsData = ref({}); // 改用 ref 保证响应式
       
       const catSearchTerms = reactive({});
       allCategories.value.forEach(c => catSearchTerms[c.id] = '');
@@ -172,6 +179,7 @@
         const u = loginUsername.value.trim();
         const p = loginPassword.value.trim();
         if (!u || !p) { loginError.value = '请输入用户名和密码'; return; }
+        loginError.value = '';
         try {
           const res = await fetch(`${API_BASE}/api/login`, {
             method: 'POST',
@@ -185,36 +193,60 @@
           } else {
             loginError.value = '用户名或密码错误';
           }
-        } catch(e) { loginError.value = '网络错误，请重试'; }
+        } catch(e) {
+          loginError.value = '网络错误，请检查网络连接后重试';
+        }
       }
 
-      // 从 KV 加载配件数据
+      // 从 KV 加载配件数据（核心修复）
       async function loadFromStorage() {
+        dataStatus.value = 'loading';
         try {
           const res = await fetch(`${API_BASE}/api/data`);
           if (res.ok) {
             const remote = await res.json();
-            if (remote.parts) {
-              Object.assign(itemsData, remote.parts);
+            // 兼容两种返回结构
+            const parts = remote.parts ? remote.parts : remote;
+            if (parts && Object.keys(parts).length > 0) {
+              itemsData.value = parts; // 整体替换，触发响应式
+              dataStatus.value = 'idle';
+            } else {
+              dataStatus.value = 'error';
             }
+          } else {
+            dataStatus.value = 'error';
           }
-        } catch(e) {}
-        allCategories.value.forEach(c => { if(!itemsData[c.id]) itemsData[c.id] = []; });
+        } catch(e) {
+          dataStatus.value = 'error';
+          console.error('加载数据失败', e);
+        }
+        // 补全分类
+        allCategories.value.forEach(c => {
+          if (!itemsData.value[c.id]) itemsData.value[c.id] = [];
+        });
       }
 
       const quoteCategories = computed(() => allCategories.value);
+      
       const filteredCategoryItems = (catId) => {
-        const list = itemsData[catId] || [];
+        const list = itemsData.value[catId] || [];
         const term = catSearchTerms[catId] || '';
-        return term ? list.filter(item => item.name.toLowerCase().includes(term.toLowerCase())) : list;
+        return term 
+          ? list.filter(item => item.name.toLowerCase().includes(term.toLowerCase())) 
+          : list;
       };
-      const getCategoryPrefix = (catId) => `[${allCategories.value.find(c=>c.id===catId)?.label || catId}]`;
+
+      const getCategoryPrefix = (catId) => 
+        `[${allCategories.value.find(c=>c.id===catId)?.label || catId}]`;
 
       const totalCost = computed(() => {
         let sum = 0;
         allCategories.value.forEach(cat => {
           const sel = selectedItems[cat.id];
-          if (sel) { const item = (itemsData[cat.id] || []).find(it => it.id === sel); if (item) sum += Number(item.cost) || 0; }
+          if (sel) {
+            const item = (itemsData.value[cat.id] || []).find(it => it.id === sel);
+            if (item) sum += Number(item.cost) || 0;
+          }
         });
         return sum;
       });
@@ -229,7 +261,7 @@
         allCategories.value.forEach(cat => {
           const selId = selectedItems[cat.id];
           if (selId) {
-            const item = (itemsData[cat.id] || []).find(it => it.id === selId);
+            const item = (itemsData.value[cat.id] || []).find(it => it.id === selId);
             if (item) details.push({ id: item.id, categoryLabel: cat.label, name: item.name });
           }
         });
@@ -240,19 +272,23 @@
         autoMatchMessage.value = '';
         const cpuId = selectedItems.cpu, gpuId = selectedItems.gpu;
         if (!cpuId) return;
-        const cpu = (itemsData.cpu || []).find(c => c.id === cpuId);
+        const cpu = (itemsData.value.cpu || []).find(c => c.id === cpuId);
         if (!cpu) return;
-        const gpu = gpuId ? (itemsData.gpu || []).find(g => g.id === gpuId) : null;
+        const gpu = gpuId ? (itemsData.value.gpu || []).find(g => g.id === gpuId) : null;
         const tdp = cpu.tdp || 65, gpuPwr = gpu?.power || 0, totalPower = tdp + gpuPwr;
 
         let chipset = '';
-        if (cpu.socket === 'LGA1700') chipset = totalPower > 600 ? 'B660' : (totalPower <= 550 ? 'H610' : 'B660');
-        else if (cpu.socket === 'LGA1200') chipset = totalPower > 500 ? 'B560' : 'H510';
+        if (cpu.socket === 'LGA1700') 
+          chipset = totalPower > 600 ? 'B660' : (totalPower <= 550 ? 'H610' : 'B660');
+        else if (cpu.socket === 'LGA1200') 
+          chipset = totalPower > 500 ? 'B560' : 'H510';
         else if (cpu.socket === 'AM4') chipset = 'B550';
         else if (cpu.socket === 'AM5') chipset = 'B650';
         
         if (chipset) {
-          const compat = (itemsData.motherboard || []).filter(mb => mb.socket === cpu.socket && mb.name.includes(chipset));
+          const compat = (itemsData.value.motherboard || []).filter(mb => 
+            mb.socket === cpu.socket && mb.name.includes(chipset)
+          );
           if (compat.length) {
             const best = compat.sort((a,b) => a.cost - b.cost)[0];
             if (!selectedItems.motherboard || !compat.some(mb => mb.id === selectedItems.motherboard)) {
@@ -261,37 +297,57 @@
             }
           }
         }
-        const coolers = itemsData.cooler || [];
+
+        const coolers = itemsData.value.cooler || [];
         const suitable = coolers.filter(c => (c.coolingTdp||0) >= tdp).sort((a,b) => a.cost - b.cost)[0];
-        if (suitable) { selectedItems.cooler = suitable.id; autoMatchMessage.value += `散热: ${suitable.name} ；`; }
+        if (suitable) {
+          selectedItems.cooler = suitable.id;
+          autoMatchMessage.value += `散热: ${suitable.name} ；`;
+        }
+
         const recWatt = Math.ceil((tdp + gpuPwr + 60)/50)*50;
-        const psus = itemsData.power || [];
-        const bestPsu = psus.filter(p => p.watt >= recWatt).sort((a,b) => a.watt - b.watt)[0];
-        if (bestPsu) { selectedItems.power = bestPsu.id; autoMatchMessage.value += `电源: ${bestPsu.name} ；`; }
+        const psus = itemsData.value.power || [];
+        const bestPsu = psus.filter(p => p.watt >= recWatt).sort((a,b)=>a.watt-b.watt)[0];
+        if (bestPsu) {
+          selectedItems.power = bestPsu.id;
+          autoMatchMessage.value += `电源: ${bestPsu.name} ；`;
+        }
+
         if (!autoMatchMessage.value) autoMatchMessage.value = '已是最佳匹配';
       };
 
       const powerSuggestion = computed(() => {
         const cpuId = selectedItems.cpu, gpuId = selectedItems.gpu;
         if (!cpuId) return '';
-        const cpu = (itemsData.cpu||[]).find(c=>c.id===cpuId);
-        const gpu = gpuId ? (itemsData.gpu||[]).find(g=>g.id===gpuId) : null;
-        const tdp = cpu?.tdp||65, gpuPwr = gpu?.power||0, rec = Math.ceil((tdp+gpuPwr+60)/50)*50;
-        const best = (itemsData.power||[]).filter(p=>p.watt>=rec).sort((a,b)=>a.watt-b.watt)[0];
+        const cpu = (itemsData.value.cpu||[]).find(c=>c.id===cpuId);
+        const gpu = gpuId ? (itemsData.value.gpu||[]).find(g=>g.id===gpuId) : null;
+        const tdp = cpu?.tdp||65, gpuPwr = gpu?.power||0;
+        const rec = Math.ceil((tdp+gpuPwr+60)/50)*50;
+        const best = (itemsData.value.power||[]).filter(p=>p.watt>=rec).sort((a,b)=>a.watt-b.watt)[0];
         return best ? `推荐电源: ${best.name} (≥${rec}W)` : `建议电源≥${rec}W`;
       });
 
-      const handleSelection = (catId) => { if (catId === 'cpu' || catId === 'gpu') performAutoMatch(); };
-      const resetAllSelections = () => { Object.keys(selectedItems).forEach(k => selectedItems[k] = ''); autoMatchMessage.value = ''; };
+      const handleSelection = (catId) => {
+        if (catId === 'cpu' || catId === 'gpu') performAutoMatch();
+      };
+
+      const resetAllSelections = () => {
+        Object.keys(selectedItems).forEach(k => selectedItems[k] = '');
+        autoMatchMessage.value = '';
+      };
+
       const saveQuoteAsImage = async () => {
         if (!quoteModalContent.value) return;
         try {
-          const canvas = await html2canvas(quoteModalContent.value, { scale: 2, backgroundColor: '#ffffff' });
+          const canvas = await html2canvas(quoteModalContent.value, { 
+            scale: 2, 
+            backgroundColor: '#ffffff' 
+          });
           const link = document.createElement('a');
           link.download = `租赁报价单_${new Date().toISOString().slice(0,10)}.png`;
           link.href = canvas.toDataURL('image/png');
           link.click();
-        } catch (err) { alert('截图失败'); }
+        } catch (err) { alert('截图失败，请重试'); }
       };
 
       return {
@@ -301,7 +357,8 @@
         powerSuggestion, autoMatchMessage, showQuoteModal, quoteModalContent,
         selectedItemsDetail, currentDate, expiryDate,
         filteredCategoryItems, getCategoryPrefix,
-        handleSelection, resetAllSelections, saveQuoteAsImage
+        handleSelection, resetAllSelections, saveQuoteAsImage,
+        dataStatus
       };
     }
   });
