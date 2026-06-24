@@ -27,6 +27,10 @@
     .user-mgmt { background: #f0fdf4; border-radius: 20px; padding: 20px; margin-top: 30px; }
     .user-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
     .user-row input { padding: 8px 14px; border-radius: 20px; border: 1px solid #cbd5e1; }
+    .tip-bar { padding: 10px 16px; border-radius: 20px; margin-bottom: 16px; font-size: 0.9rem; }
+    .tip-success { background: #dcfce7; color: #166534; }
+    .tip-error { background: #fee2e2; color: #991b1b; }
+    .tip-loading { background: #dbeafe; color: #1e40af; }
   </style>
 </head>
 <body>
@@ -47,6 +51,12 @@
         <button class="btn" @click="logout">退出</button>
       </div>
     </div>
+
+    <!-- 状态提示 -->
+    <div v-if="saveStatus === 'loading'" class="tip-bar tip-loading">⏳ 正在保存数据...</div>
+    <div v-if="saveStatus === 'error'" class="tip-bar tip-error">❌ 保存失败，请检查网络或 Worker 接口</div>
+    <div v-if="loadStatus === 'error'" class="tip-bar tip-error">❌ 数据加载失败，请刷新页面重试</div>
+
     <div class="import-export-bar flex">
       <button class="btn" @click="downloadSimpleTemplate">📥 下载模板 (CSV)</button>
       <label class="btn" style="cursor:pointer;">
@@ -73,13 +83,13 @@
         </thead>
         <tbody>
           <tr v-for="item in categoryItems(cat.id)" :key="item.id">
-            <td class="editable-cell"><input v-model="item.name" /></td>
-            <td class="editable-cell"><input v-model.number="item.cost" type="number" style="width:100px" /></td>
-            <td v-if="cat.id==='cpu'" class="editable-cell"><input v-model="item.socket" /></td>
-            <td v-if="cat.id==='cpu'" class="editable-cell"><input v-model.number="item.tdp" type="number" style="width:70px" /></td>
-            <td v-if="cat.id==='motherboard'" class="editable-cell"><input v-model="item.socket" /></td>
-            <td v-if="cat.id==='gpu'" class="editable-cell"><input v-model.number="item.power" type="number" style="width:80px" /></td>
-            <td v-if="cat.id==='cooler'" class="editable-cell"><input v-model.number="item.coolingTdp" type="number" style="width:90px" /></td>
+            <td class="editable-cell"><input v-model="item.name" @input="debounceSave" /></td>
+            <td class="editable-cell"><input v-model.number="item.cost" type="number" style="width:100px" @input="debounceSave" /></td>
+            <td v-if="cat.id==='cpu'" class="editable-cell"><input v-model="item.socket" @input="debounceSave" /></td>
+            <td v-if="cat.id==='cpu'" class="editable-cell"><input v-model.number="item.tdp" type="number" style="width:70px" @input="debounceSave" /></td>
+            <td v-if="cat.id==='motherboard'" class="editable-cell"><input v-model="item.socket" @input="debounceSave" /></td>
+            <td v-if="cat.id==='gpu'" class="editable-cell"><input v-model.number="item.power" type="number" style="width:80px" @input="debounceSave" /></td>
+            <td v-if="cat.id==='cooler'" class="editable-cell"><input v-model.number="item.coolingTdp" type="number" style="width:90px" @input="debounceSave" /></td>
             <td><span @click="removeItem(cat.id, item.id)" style="cursor:pointer;">🗑️</span></td>
           </tr>
         </tbody>
@@ -106,12 +116,12 @@
 </div>
 
 <script>
-  const { createApp, ref, reactive, watch } = Vue;
+  const { createApp, ref, reactive, onMounted } = Vue;
 
-  // ===== 配置区 =====
-  const API_BASE = 'https://pc-rental-all.3354843538.workers.dev'; // 替换为你的 Worker 域名
-  const ADMIN_TOKEN = 'marryme'; // 必须与 Worker 中的一致
-  const ADMIN_PASSWORD = 'admin123'; // 登录 admin.html 的密码
+  // ===== 配置区（必须与前端完全一致）=====
+  const API_BASE = 'https://pc-rental-all.3354843538.workers.dev';
+  const ADMIN_TOKEN = 'marryme';
+  const ADMIN_PASSWORD = 'admin123';
 
   const defaultCategories = [
     { id: 'cpu', name: 'CPU' }, { id: 'gpu', name: '显卡' }, { id: 'motherboard', name: '主板' },
@@ -171,10 +181,13 @@
       const isLoggedIn = ref(false);
       const passwordInput = ref('');
       const allCategories = ref(defaultCategories);
-      const itemsData = reactive({});
+      const itemsData = ref({});
       const users = ref([]);
       const newUsername = ref('');
       const newPassword = ref('');
+      const saveStatus = ref('idle'); // idle / loading / error
+      const loadStatus = ref('idle');
+      let saveTimer = null;
 
       // 登录 admin 面板
       const login = () => {
@@ -191,41 +204,67 @@
 
       // 从 KV 加载配件数据
       async function loadData() {
+        loadStatus.value = 'loading';
         try {
           const res = await fetch(`${API_BASE}/api/data`);
           if (res.ok) {
             const remote = await res.json();
-            if (remote.parts && Object.keys(remote.parts).length > 0) {
-              Object.assign(itemsData, remote.parts);
+            // 兼容两种返回结构：直接返回数据 或 { parts: 数据 }
+            const parts = remote.parts ? remote.parts : remote;
+            if (parts && Object.keys(parts).length > 0) {
+              itemsData.value = parts;
+            } else {
+              setDefault();
             }
+            loadStatus.value = 'idle';
+          } else {
+            loadStatus.value = 'error';
+            setDefault();
           }
-        } catch(e) {}
-        // 如果KV没有数据，使用默认数据
-        if (!itemsData.cpu || itemsData.cpu.length === 0) {
+        } catch(e) {
+          loadStatus.value = 'error';
           setDefault();
         }
-        allCategories.value.forEach(c => { if(!itemsData[c.id]) itemsData[c.id] = []; });
+        // 补全所有分类
+        allCategories.value.forEach(c => {
+          if (!itemsData.value[c.id]) itemsData.value[c.id] = [];
+        });
       }
 
       const setDefault = () => {
+        const data = {};
         allCategories.value.forEach(cat => {
-          itemsData[cat.id] = defaultItems[cat.id] ? [...defaultItems[cat.id].map(it => ({...it, id: it.id||genId()}))] : [];
+          data[cat.id] = defaultItems[cat.id] 
+            ? [...defaultItems[cat.id].map(it => ({...it, id: it.id||genId()}))] 
+            : [];
         });
+        itemsData.value = data;
         saveToStorage();
+      };
+
+      // 防抖保存
+      const debounceSave = () => {
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => saveToStorage(), 800);
       };
 
       // 保存配件数据到 KV
       async function saveToStorage() {
+        saveStatus.value = 'loading';
         try {
-          await fetch(`${API_BASE}/api/parts`, {
+          const res = await fetch(`${API_BASE}/api/parts`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${ADMIN_TOKEN}`
             },
-            body: JSON.stringify({ parts: { ...itemsData } })
+            body: JSON.stringify({ parts: { ...itemsData.value } })
           });
-        } catch(e) { console.error('保存失败', e); }
+          saveStatus.value = res.ok ? 'idle' : 'error';
+        } catch(e) {
+          saveStatus.value = 'error';
+          console.error('保存失败', e);
+        }
       }
 
       // 用户管理 API
@@ -256,70 +295,109 @@
             await loadUsers();
           } else if (res.status === 409) {
             alert('用户名已存在');
+          } else {
+            alert('添加失败');
           }
-        } catch(e) { alert('添加失败'); }
+        } catch(e) { alert('网络错误，添加失败'); }
       }
 
       async function deleteUser(idx) {
         const username = users.value[idx].username;
+        if (!confirm(`确定删除用户 ${username}？`)) return;
         try {
           const res = await fetch(`${API_BASE}/api/user?username=${encodeURIComponent(username)}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
           });
           if (res.ok) await loadUsers();
-        } catch(e) { alert('删除失败'); }
+          else alert('删除失败');
+        } catch(e) { alert('网络错误，删除失败'); }
       }
 
-      const categoryItems = (catId) => itemsData[catId] || [];
+      const categoryItems = (catId) => itemsData.value[catId] || [];
+      
       const addItem = (catId) => {
         const newItem = { id: genId(), name: '新配件', cost: 0 };
         if (catId==='cpu') { newItem.socket=''; newItem.tdp=65; }
         if (catId==='motherboard') newItem.socket='';
         if (catId==='gpu') newItem.power=100;
-        itemsData[catId].push(newItem); saveToStorage();
+        if (!itemsData.value[catId]) itemsData.value[catId] = [];
+        itemsData.value[catId].push(newItem);
+        saveToStorage();
       };
+
       const removeItem = (catId, id) => {
-        const idx = itemsData[catId].findIndex(i=>i.id===id);
-        if(idx>-1) itemsData[catId].splice(idx,1); saveToStorage();
+        const idx = itemsData.value[catId].findIndex(i=>i.id===id);
+        if(idx>-1) {
+          itemsData.value[catId].splice(idx,1);
+          saveToStorage();
+        }
       };
+
       const clearAllItems = () => {
-        if(confirm('清空所有配件？')) { allCategories.value.forEach(c => itemsData[c.id] = []); saveToStorage(); }
+        if(confirm('清空所有配件？')) {
+          allCategories.value.forEach(c => itemsData.value[c.id] = []);
+          saveToStorage();
+        }
       };
-      const resetToDefault = () => { setDefault(); };
+
+      const resetToDefault = () => {
+        if (confirm('恢复为默认数据？当前修改将丢失')) {
+          setDefault();
+        }
+      };
 
       const exportData = () => {
-        const blob = new Blob([JSON.stringify(itemsData)], {type:'application/json'});
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diy_cost.json'; a.click();
+        const blob = new Blob([JSON.stringify(itemsData.value)], {type:'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'diy_cost.json';
+        a.click();
       };
+
       const downloadSimpleTemplate = () => {
         let csv = '配件名称,成本\nIntel i5-12400F,850\nRTX 4060,1900\n华硕 H610M-K,420';
         const blob = new Blob(['\uFEFF'+csv], {type:'text/csv'});
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '模板.csv'; a.click();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = '模板.csv';
+        a.click();
       };
+
       const handleFileUpload = (e) => {
-        const file = e.target.files[0]; if(!file) return;
+        const file = e.target.files[0];
+        if(!file) return;
         const reader = new FileReader();
         reader.onload = (ev) => {
           const content = ev.target.result;
           try {
-            if (file.name.endsWith('.json')) { Object.assign(itemsData, JSON.parse(content)); saveToStorage(); alert('导入成功'); }
-            else {
+            if (file.name.endsWith('.json')) {
+              itemsData.value = JSON.parse(content);
+              saveToStorage();
+              alert('导入成功');
+            } else {
               const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
               const headers = lines[0].split(',').map(h=>h.trim());
-              const nameIdx = headers.findIndex(h=>h.includes('名称')), costIdx = headers.findIndex(h=>h.includes('成本'));
+              const nameIdx = headers.findIndex(h=>h.includes('名称'));
+              const costIdx = headers.findIndex(h=>h.includes('成本'));
               for (let i=1; i<lines.length; i++) {
                 const cols = lines[i].split(',').map(c=>c.trim());
                 if(cols.length<2) continue;
                 const name = cols[nameIdx], cost = parseFloat(cols[costIdx])||0;
                 const catId = guessCategory(name);
                 const newItem = { id: genId(), name, cost };
-                if(catId==='cpu') { const info=inferCpuInfo(name); newItem.socket=info.socket; newItem.tdp=info.tdp; }
+                if(catId==='cpu') {
+                  const info=inferCpuInfo(name);
+                  newItem.socket=info.socket;
+                  newItem.tdp=info.tdp;
+                }
                 if(catId==='gpu') newItem.power = inferGpuPower(name);
                 if(catId==='motherboard') newItem.socket = inferMotherboardSocket(name);
-                itemsData[catId].push(newItem);
+                if (!itemsData.value[catId]) itemsData.value[catId] = [];
+                itemsData.value[catId].push(newItem);
               }
-              saveToStorage(); alert('导入成功');
+              saveToStorage();
+              alert('导入成功');
             }
           } catch(err) { alert('解析失败'); }
           e.target.value = '';
@@ -327,14 +405,13 @@
         reader.readAsText(file, 'UTF-8');
       };
 
-      watch(itemsData, () => saveToStorage(), { deep: true });
-
       return {
         isLoggedIn, passwordInput, login, logout,
         allCategories, itemsData, categoryItems,
         addItem, removeItem, clearAllItems, resetToDefault,
         exportData, downloadSimpleTemplate, handleFileUpload,
-        users, newUsername, newPassword, addUser, deleteUser
+        users, newUsername, newPassword, addUser, deleteUser,
+        saveStatus, loadStatus, debounceSave
       };
     }
   });
