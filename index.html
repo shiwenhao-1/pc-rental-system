@@ -592,8 +592,8 @@
           return categories.filter(cat => cat.required && !selectedItems[cat.key]);
         });
 
-        const price6 = computed(() => Math.round(totalCost.value / 6));
-        const price12 = computed(() => Math.round(totalCost.value / 12));
+        const price6 = computed(() => Math.round(totalCost.value / 15));
+        const price12 = computed(() => Math.round(totalCost.value / 15.7));
         const price12Send = computed(() => Math.round((totalCost.value * 1.5) / 12));
         const price24Send = computed(() => Math.round((totalCost.value * 1.8) / 24));
 
