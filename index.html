@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DIY电脑租赁报价</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- 引入图片生成库 -->
+  <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body {
@@ -16,6 +18,62 @@
       max-width: 520px;
       margin: 0 auto;
     }
+
+    /* ========== 登录页样式 ========== */
+    .login-box {
+      background: #fff;
+      border-radius: 20px;
+      padding: 40px 32px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+      margin-top: 80px;
+      text-align: center;
+    }
+    .login-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .login-subtitle {
+      color: #888;
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+    .login-input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid #e8e8e8;
+      border-radius: 10px;
+      font-size: 15px;
+      margin-bottom: 16px;
+      outline: none;
+    }
+    .login-input:focus { border-color: #52c41a; }
+    .login-error {
+      color: #f5222d;
+      font-size: 13px;
+      margin-bottom: 16px;
+      min-height: 18px;
+    }
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(90deg, #52c41a 0%, #389e0d 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ========== 报价页样式 ========== */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+    }
     .page-title {
       font-size: 36px;
       font-weight: 700;
@@ -25,7 +83,15 @@
     .page-subtitle {
       color: #888;
       font-size: 16px;
-      margin-bottom: 32px;
+    }
+    .logout-btn {
+      padding: 8px 16px;
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
     }
 
     /* 配置卡片 */
@@ -102,7 +168,7 @@
     .option-item:hover { background: #f6ffed; }
     .option-empty { color: #999; text-align: center; padding: 20px 0; font-size: 14px; }
 
-    /* 提示条 */
+    /* 提示条：默认隐藏 */
     .tip-bar {
       background: #fffbe6;
       border: 1px solid #ffe58f;
@@ -112,12 +178,15 @@
       font-size: 14px;
       color: #d48806;
       line-height: 1.6;
+      display: none; /* 默认隐藏 */
     }
+    .tip-bar.show { display: block; }
     .power-tip {
       background: #f6ffed;
       border-color: #b7eb8f;
       color: #389e0d;
       margin-top: 8px;
+      display: block; /* 功耗提示一直显示 */
     }
 
     /* 底部按钮 */
@@ -205,9 +274,24 @@
       color: #999;
       margin-bottom: 12px;
     }
-    .modal-close {
-      width: 100%;
-      margin-top: 8px;
+    .modal-btn-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .modal-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn-save-img {
+      background: #1890ff;
+      color: #fff;
+    }
+    .btn-close {
       background: #f5f5f5;
       color: #666;
     }
@@ -215,105 +299,173 @@
 </head>
 <body>
   <div id="app" class="container">
-    <h1 class="page-title">DIY报价</h1>
-    <p class="page-subtitle">自定义配置 · 精准报价</p>
 
-    <!-- 配置卡片 -->
-    <div class="config-card">
-      <div v-for="cat in categories" :key="cat.key">
-        <div class="config-item" @click="toggleDropdown(cat.key)">
-          <div class="item-icon">{{ cat.icon }}</div>
-          <div class="item-label">{{ cat.label }}</div>
-          <div class="item-value" :class="{ selected: selectedItems[cat.key] }">
-            {{ selectedItems[cat.key]?.name || '请选择' + cat.label }}
-          </div>
-          <div class="item-arrow">›</div>
+    <!-- ========== 登录页面 ========== -->
+    <div v-if="!isLoggedIn" class="login-box">
+      <h2 class="login-title">🔒 登录报价系统</h2>
+      <p class="login-subtitle">请输入账号密码登录</p>
+      <input v-model="loginUsername" class="login-input" placeholder="用户名" />
+      <input v-model="loginPassword" type="password" class="login-input" placeholder="密码" />
+      <div class="login-error">{{ loginError }}</div>
+      <button class="login-btn" :disabled="loginLoading" @click="handleLogin">
+        {{ loginLoading ? '登录中...' : '登录' }}
+      </button>
+    </div>
+
+    <!-- ========== 报价主页面 ========== -->
+    <div v-else>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">DIY报价</h1>
+          <p class="page-subtitle">自定义配置 · 精准报价</p>
         </div>
+        <button class="logout-btn" @click="handleLogout">退出登录</button>
+      </div>
 
-        <!-- 下拉搜索面板 -->
-        <div v-if="activeDropdown === cat.key" class="dropdown-panel">
-          <input 
-            v-model="searchKeywords[cat.key]" 
-            class="search-input" 
-            :placeholder="'搜索' + cat.label + '...'"
-            @click.stop
-          />
-          <div v-if="filteredParts(cat.key).length === 0" class="option-empty">暂无匹配结果</div>
-          <div 
-            v-for="item in filteredParts(cat.key)" 
-            :key="item.id"
-            class="option-item"
-            @click="selectItem(cat.key, item)"
-          >
-            {{ item.name }}
+      <!-- 配置卡片 -->
+      <div class="config-card">
+        <div v-for="cat in categories" :key="cat.key">
+          <div class="config-item" @click="toggleDropdown(cat.key)">
+            <div class="item-icon">{{ cat.icon }}</div>
+            <div class="item-label">{{ cat.label }}</div>
+            <div class="item-value" :class="{ selected: selectedItems[cat.key] }">
+              {{ selectedItems[cat.key]?.name || '请选择' + cat.label }}
+            </div>
+            <div class="item-arrow">›</div>
+          </div>
+
+          <!-- 下拉搜索面板 -->
+          <div v-if="activeDropdown === cat.key" class="dropdown-panel">
+            <input 
+              v-model="searchKeywords[cat.key]" 
+              class="search-input" 
+              :placeholder="'搜索' + cat.label + '...'"
+              @click.stop
+            />
+            <div v-if="filteredParts(cat.key).length === 0" class="option-empty">暂无匹配结果</div>
+            <div 
+              v-for="item in filteredParts(cat.key)" 
+              :key="item.id"
+              class="option-item"
+              @click="selectItem(cat.key, item)"
+            >
+              {{ item.name }}
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 提示区域 -->
-    <div class="tip-bar" v-if="missingRequired.length > 0">
-      ⚠️ 请选择必选项：{{ missingRequired.map(c => c.label).join('、') }}
-    </div>
-    <div class="tip-bar power-tip" v-if="totalPower > 0">
-      ⚡ 建议电源 ≥ {{ Math.ceil(totalPower * 1.3) }}W
-    </div>
+      <!-- 提示区域：必选提示仅在提交失败时显示 -->
+      <div class="tip-bar" :class="{ show: showMissingTip }">
+        ⚠️ 请选择必选项：{{ missingRequired.map(c => c.label).join('、') }}
+      </div>
+      <div class="tip-bar power-tip" v-if="totalPower > 0">
+        ⚡ 建议电源 ≥ {{ Math.ceil(totalPower * 1.3) }}W
+      </div>
 
-    <!-- 底部按钮 -->
-    <div class="btn-group">
-      <button class="btn btn-primary" :disabled="missingRequired.length > 0" @click="generateQuote">
-        提交报价
-      </button>
-      <button class="btn btn-secondary" @click="resetConfig">
-        重置
-      </button>
-    </div>
+      <!-- 底部按钮 -->
+      <div class="btn-group">
+        <button class="btn btn-primary" @click="generateQuote">
+          提交报价
+        </button>
+        <button class="btn btn-secondary" @click="resetConfig">
+          重置
+        </button>
+      </div>
 
-    <!-- 报价单弹窗 -->
-    <div class="modal-mask" v-if="showQuoteModal" @click.self="showQuoteModal = false">
-      <div class="quote-modal">
-        <div class="quote-section">
-          <h3 class="quote-title">DIY配置</h3>
-          <div class="quote-row" v-for="cat in categories" :key="cat.key">
-            <span class="label">{{ cat.label }}：</span>
-            <span class="value">{{ selectedItems[cat.key]?.name || '未选择' }}</span>
+      <!-- 报价单弹窗 -->
+      <div class="modal-mask" v-if="showQuoteModal" @click.self="showQuoteModal = false">
+        <div class="quote-modal" id="quoteCard">
+          <div class="quote-section">
+            <h3 class="quote-title">DIY配置</h3>
+            <div class="quote-row" v-for="cat in categories" :key="cat.key">
+              <span class="label">{{ cat.label }}：</span>
+              <span class="value">{{ selectedItems[cat.key]?.name || '未选择' }}</span>
+            </div>
+          </div>
+
+          <div class="quote-section">
+            <h3 class="quote-title">DIY配置价格</h3>
+            <div class="quote-date">报价日期：{{ today }}（有效期为：1天）</div>
+            
+            <div class="quote-row price-row">
+              <span class="label">长租月单价（6期可退）：</span>
+              <span class="value">{{ price6 }} 元/期</span>
+            </div>
+            <div class="quote-row price-row">
+              <span class="label">一年固定租：</span>
+              <span class="value">{{ price12 }} 元/期</span>
+            </div>
+            <div class="quote-row price-row">
+              <span class="label">12期租满送：</span>
+              <span class="value">{{ price12Send }} 元/期</span>
+            </div>
+            <div class="quote-row price-row">
+              <span class="label">24期租满送：</span>
+              <span class="value">{{ price24Send }} 元/期</span>
+            </div>
+          </div>
+
+          <div class="modal-btn-group">
+            <button class="modal-btn btn-save-img" @click="saveAsImage">💾 保存为图片</button>
+            <button class="modal-btn btn-close" @click="showQuoteModal = false">关闭</button>
           </div>
         </div>
-
-        <div class="quote-section">
-          <h3 class="quote-title">DIY配置价格</h3>
-          <div class="quote-date">报价日期：{{ today }}（有效期为：1天）</div>
-          
-          <div class="quote-row price-row">
-            <span class="label">长租月单价（6期可退）：</span>
-            <span class="value">{{ price6 }} 元/期</span>
-          </div>
-          <div class="quote-row price-row">
-            <span class="label">一年固定租：</span>
-            <span class="value">{{ price12 }} 元/期</span>
-          </div>
-          <div class="quote-row price-row">
-            <span class="label">12期租满送：</span>
-            <span class="value">{{ price12Send }} 元/期</span>
-          </div>
-          <div class="quote-row price-row">
-            <span class="label">24期租满送：</span>
-            <span class="value">{{ price24Send }} 元/期</span>
-          </div>
-        </div>
-
-        <button class="btn modal-close" @click="showQuoteModal = false">关闭</button>
       </div>
     </div>
   </div>
 
   <script>
-    const { createApp, reactive, computed, onMounted, ref } = Vue;
+    const { createApp, reactive, computed, onMounted, ref, watch } = Vue;
     const API_BASE = "https://api.xszd.cc.cd"; // 替换为你的接口域名
 
     createApp({
       setup() {
-        // 分类配置：icon、名称、键名、是否必选
+        // ========== 登录相关 ==========
+        const isLoggedIn = ref(false);
+        const loginUsername = ref('');
+        const loginPassword = ref('');
+        const loginError = ref('');
+        const loginLoading = ref(false);
+
+        const handleLogin = async () => {
+          loginError.value = '';
+          if (!loginUsername.value || !loginPassword.value) {
+            loginError.value = '请输入用户名和密码';
+            return;
+          }
+          loginLoading.value = true;
+          try {
+            const res = await fetch(`${API_BASE}/api/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: loginUsername.value,
+                password: loginPassword.value
+              })
+            });
+            const data = await res.json();
+            if (data.success) {
+              isLoggedIn.value = true;
+              localStorage.setItem('quote_token', data.token);
+            } else {
+              loginError.value = data.message || '登录失败';
+            }
+          } catch (e) {
+            loginError.value = '网络错误，请检查网络连接';
+          } finally {
+            loginLoading.value = false;
+          }
+        };
+
+        const handleLogout = () => {
+          isLoggedIn.value = false;
+          localStorage.removeItem('quote_token');
+          loginUsername.value = '';
+          loginPassword.value = '';
+        };
+
+        // ========== 分类配置 ==========
         const categories = [
           { key: 'cpu', label: 'CPU', icon: '🖥️', required: true },
           { key: 'cooler', label: '散热器', icon: '🌬️', required: true },
@@ -329,22 +481,21 @@
           { key: 'other', label: '其他', icon: '⚙️', required: true },
         ];
 
-        const partsData = reactive({}); // 所有配件数据
-        const selectedItems = reactive({}); // 已选中的配件
-        const activeDropdown = ref(null); // 当前展开的下拉
-        const searchKeywords = reactive({}); // 每个分类的搜索关键词
-        const showQuoteModal = ref(false); // 报价单弹窗开关
+        const partsData = reactive({});
+        const selectedItems = reactive({});
+        const activeDropdown = ref(null);
+        const searchKeywords = reactive({});
+        const showQuoteModal = ref(false);
+        const showMissingTip = ref(false); // 必选提示默认隐藏
 
-        // 初始化搜索关键词
         categories.forEach(c => searchKeywords[c.key] = '');
 
-        // 切换下拉展开
+        // ========== 下拉交互 ==========
         const toggleDropdown = (key) => {
           activeDropdown.value = activeDropdown.value === key ? null : key;
-          searchKeywords[key] = ''; // 展开时清空搜索
+          searchKeywords[key] = '';
         };
 
-        // 过滤配件
         const filteredParts = (key) => {
           const list = partsData[key] || [];
           const keyword = searchKeywords[key].toLowerCase();
@@ -352,20 +503,84 @@
           return list.filter(item => item.name.toLowerCase().includes(keyword));
         };
 
-        // 选中配件
         const selectItem = (key, item) => {
           selectedItems[key] = item;
           activeDropdown.value = null;
         };
 
-        // 计算总成本
+        // ========== 自动匹配规则 ==========
+        // 1. CPU 自动匹配主板
+        const matchMotherboard = (cpuName) => {
+          const mbList = partsData.motherboard || [];
+          if (!cpuName || mbList.length === 0) return;
+
+          // 提取CPU代际数字
+          const genMatch = cpuName.match(/-(\d{1,2})\d{3}/);
+          if (!genMatch) return;
+          const gen = parseInt(genMatch[1]);
+
+          // 代际对应默认主板芯片组
+          let defaultChipset = '';
+          if (gen === 2) defaultChipset = 'H61';
+          else if (gen === 4 || gen === 5) defaultChipset = 'B85';
+          else if (gen === 6 || gen === 7) defaultChipset = 'B150';
+          else if (gen === 8 || gen === 9) defaultChipset = 'H310';
+          else if (gen === 10) defaultChipset = 'H410';
+          else if (gen === 11) defaultChipset = 'H510';
+          else if (gen === 12) defaultChipset = 'H610';
+          else if (gen === 13 || gen === 14) defaultChipset = 'B660';
+
+          if (!defaultChipset) return;
+
+          // 从主板列表中找到对应芯片组的第一款
+          const matchedMb = mbList.find(item => 
+            item.name.toUpperCase().includes(defaultChipset.toUpperCase())
+          );
+          if (matchedMb) {
+            selectedItems.motherboard = matchedMb;
+          }
+        };
+
+        // 2. CPU 自动匹配散热器
+        const matchCooler = (cpuName) => {
+          const coolerList = partsData.cooler || [];
+          if (!cpuName || coolerList.length === 0) return;
+
+          let targetType = '';
+          // i7 或 后缀 KF → 6热管
+          if (cpuName.includes('i7') || cpuName.toUpperCase().includes('KF')) {
+            targetType = '6热管';
+          }
+          // i5 系列 → 4热管
+          else if (cpuName.includes('i5')) {
+            targetType = '4热管';
+          }
+
+          if (!targetType) return;
+
+          const matchedCooler = coolerList.find(item => 
+            item.name.includes(targetType)
+          );
+          if (matchedCooler) {
+            selectedItems.cooler = matchedCooler;
+          }
+        };
+
+        // 监听CPU变化，自动匹配主板和散热器
+        watch(() => selectedItems.cpu, (newCpu) => {
+          if (newCpu?.name) {
+            matchMotherboard(newCpu.name);
+            matchCooler(newCpu.name);
+          }
+        });
+
+        // ========== 计算属性 ==========
         const totalCost = computed(() => {
           return categories.reduce((sum, cat) => {
             return sum + (selectedItems[cat.key]?.cost || 0);
           }, 0);
         });
 
-        // 计算总功耗
         const totalPower = computed(() => {
           return categories.reduce((sum, cat) => {
             const item = selectedItems[cat.key];
@@ -373,38 +588,65 @@
           }, 0);
         });
 
-        // 未选的必选项
         const missingRequired = computed(() => {
           return categories.filter(cat => cat.required && !selectedItems[cat.key]);
         });
 
-        // 价格计算
         const price6 = computed(() => Math.round(totalCost.value / 6));
         const price12 = computed(() => Math.round(totalCost.value / 12));
         const price12Send = computed(() => Math.round((totalCost.value * 1.5) / 12));
         const price24Send = computed(() => Math.round((totalCost.value * 1.8) / 24));
 
-        // 今日日期
         const today = computed(() => {
           const d = new Date();
           return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         });
 
-        // 生成报价单
+        // ========== 操作函数 ==========
         const generateQuote = () => {
-          if (missingRequired.value.length > 0) return;
+          // 提交时才校验并显示提示
+          if (missingRequired.value.length > 0) {
+            showMissingTip.value = true;
+            return;
+          }
+          showMissingTip.value = false;
           showQuoteModal.value = true;
         };
 
-        // 重置配置
         const resetConfig = () => {
           categories.forEach(c => selectedItems[c.key] = null);
           activeDropdown.value = null;
           showQuoteModal.value = false;
+          showMissingTip.value = false;
         };
 
-        // 从后端加载配件数据
+        // 保存报价单为图片
+        const saveAsImage = async () => {
+          const element = document.getElementById('quoteCard');
+          try {
+            const canvas = await html2canvas(element, {
+              backgroundColor: '#ffffff',
+              scale: 2, // 高清2倍图
+              useCORS: true
+            });
+            const link = document.createElement('a');
+            link.download = `电脑租赁报价单_${today.value}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+          } catch (e) {
+            alert('图片生成失败，请重试');
+            console.error(e);
+          }
+        };
+
+        // ========== 初始化加载数据 ==========
         onMounted(async () => {
+          // 检查本地登录状态
+          if (localStorage.getItem('quote_token')) {
+            isLoggedIn.value = true;
+          }
+
+          // 加载配件数据
           try {
             const res = await fetch(`${API_BASE}/api/data`);
             const data = await res.json();
@@ -417,6 +659,15 @@
         });
 
         return {
+          // 登录
+          isLoggedIn,
+          loginUsername,
+          loginPassword,
+          loginError,
+          loginLoading,
+          handleLogin,
+          handleLogout,
+          // 配置
           categories,
           selectedItems,
           activeDropdown,
@@ -424,6 +675,7 @@
           filteredParts,
           toggleDropdown,
           selectItem,
+          // 计算
           totalCost,
           totalPower,
           missingRequired,
@@ -432,9 +684,12 @@
           price12Send,
           price24Send,
           today,
+          // 弹窗
           showQuoteModal,
+          showMissingTip,
           generateQuote,
           resetConfig,
+          saveAsImage,
         };
       }
     }).mount('#app');
