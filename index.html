@@ -308,7 +308,7 @@
   </div>
 
   <script>
-    const { createApp, reactive, computed, onMounted } = Vue;
+    const { createApp, reactive, computed, onMounted, ref } = Vue;
     const API_BASE = "https://api.xszd.cc.cd"; // 替换为你的接口域名
 
     createApp({
@@ -331,9 +331,9 @@
 
         const partsData = reactive({}); // 所有配件数据
         const selectedItems = reactive({}); // 已选中的配件
-        const activeDropdown = reactive({ value: null }); // 当前展开的下拉
+        const activeDropdown = ref(null); // 当前展开的下拉
         const searchKeywords = reactive({}); // 每个分类的搜索关键词
-        const showQuoteModal = reactive({ value: false });
+        const showQuoteModal = ref(false); // 报价单弹窗开关
 
         // 初始化搜索关键词
         categories.forEach(c => searchKeywords[c.key] = '');
@@ -400,6 +400,7 @@
         const resetConfig = () => {
           categories.forEach(c => selectedItems[c.key] = null);
           activeDropdown.value = null;
+          showQuoteModal.value = false;
         };
 
         // 从后端加载配件数据
