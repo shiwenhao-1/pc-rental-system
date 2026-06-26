@@ -1,368 +1,442 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DIY 电脑租赁报价</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DIY电脑租赁报价</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
-    body { background: #f5f7fb; padding: 16px 12px; min-height: 100vh; }
-    .app-container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); overflow: hidden; padding: 20px 18px; position: relative; min-height: 500px; }
-    .login-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: white; display: flex; align-items: center; justify-content: center; flex-direction: column; z-index: 10; }
-    .login-box { background: #f8fafc; padding: 40px; border-radius: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; }
-    .login-box input { display: block; width: 250px; padding: 12px 20px; margin: 10px auto; border-radius: 30px; border: 1px solid #cbd5e1; font-size: 1rem; }
-    .quote-panel { display: flex; flex-direction: column; gap: 6px; }
-    .selector-row { background: #fafcff; border-radius: 18px; border: 1px solid #e9eef4; margin-bottom: 8px; padding: 12px 12px; }
-    .selector-label { font-weight: 600; color: #0f172a; font-size: 1rem; margin-bottom: 6px; }
-    .selector-control { display: flex; flex-direction: column; gap: 6px; }
-    .cat-search { width: 100%; padding: 10px 14px; border-radius: 30px; border: 1.5px solid #dde3ed; background: white; font-size: 0.9rem; }
-    select { width: 100%; padding: 12px 16px; border-radius: 20px; border: 1.5px solid #dde3ed; background: white; font-size: 0.95rem; color: #1e293b; outline: none; }
-    .reset-btn-container { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 12px; }
-    .rent-summary { background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%); border-radius: 30px; padding: 24px 20px; margin: 20px 0 10px; color: white; }
-    .rent-options { display: flex; flex-wrap: wrap; gap: 16px; }
-    .rent-card { background: rgba(255,255,255,0.08); border-radius: 24px; padding: 16px 20px; flex: 1 1 140px; backdrop-filter: blur(4px); }
-    .rent-card .label { font-size: 0.9rem; opacity: 0.8; }
-    .rent-card .price { font-size: 1.8rem; font-weight: 700; }
-    .badge { background: #fbbf24; color: #0f172a; padding: 2px 8px; border-radius: 30px; font-size: 0.75rem; margin-left: 8px; }
-    .btn { background: white; border: 1px solid #cbd5e1; padding: 8px 16px; border-radius: 40px; font-weight: 500; cursor: pointer; font-size: 0.9rem; }
-    .btn-primary { background: #1e293b; border-color: #1e293b; color: white; }
-    .btn-success { background: #10b981; border-color: #10b981; color: white; }
-    .warning-tip { background: #fef9c3; padding: 8px 16px; border-radius: 30px; color: #854d0e; }
-    .error-tip { background: #fee2e2; padding: 12px 16px; border-radius: 20px; color: #991b1b; margin-bottom: 12px; }
-    .loading-tip { background: #dbeafe; padding: 12px 16px; border-radius: 20px; color: #1e40af; margin-bottom: 12px; }
-    .flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body {
+      background: linear-gradient(180deg, #f0f9f4 0%, #e8f5ee 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .page-title {
+      font-size: 36px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+    }
+    .page-subtitle {
+      color: #888;
+      font-size: 16px;
+      margin-bottom: 32px;
+    }
 
-    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal-content { background: white; width: 90%; max-width: 700px; max-height: 85vh; border-radius: 32px; padding: 24px; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .modal-header h3 { font-size: 1.5rem; color: #1e293b; }
-    .close-btn { font-size: 28px; cursor: pointer; line-height: 1; color: #64748b; }
-    .quote-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-    .quote-table th { background: #f1f5f9; padding: 12px 8px; font-weight: 600; }
-    .quote-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; }
-    .rent-summary-modal { background: #1e293b; color: white; border-radius: 24px; padding: 20px; margin-top: 16px; }
-    .rent-summary-modal .flex { justify-content: space-around; }
-    .rent-item-modal { text-align: center; }
-    .rent-item-modal .price { font-size: 2rem; font-weight: 700; }
-    .quote-date { text-align: right; margin: 8px 0; color: #64748b; }
-    .device-value-row { display: flex; justify-content: space-between; padding: 12px 8px; background: #f8fafc; border-radius: 16px; margin: 12px 0; font-weight: 600; }
-    .modal-footer { display: flex; justify-content: flex-end; margin-top: 16px; gap: 12px; }
+    /* 配置卡片 */
+    .config-card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 8px 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+      margin-bottom: 20px;
+    }
+    .config-item {
+      display: flex;
+      align-items: center;
+      padding: 18px 24px;
+      border-bottom: 1px solid #f2f2f2;
+      cursor: pointer;
+      transition: background 0.2s;
+      position: relative;
+    }
+    .config-item:last-child { border-bottom: none; }
+    .config-item:hover { background: #fafafa; }
+    .item-icon {
+      width: 32px;
+      height: 32px;
+      margin-right: 16px;
+      color: #52c41a;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .item-label {
+      font-size: 17px;
+      color: #333;
+      width: 80px;
+      flex-shrink: 0;
+    }
+    .item-value {
+      flex: 1;
+      text-align: right;
+      font-size: 17px;
+      color: #999;
+      margin-right: 8px;
+    }
+    .item-value.selected { color: #333; font-weight: 500; }
+    .item-arrow { color: #ccc; font-size: 14px; }
+
+    /* 下拉搜索面板 */
+    .dropdown-panel {
+      background: #fff;
+      border-top: 1px solid #f2f2f2;
+      padding: 12px 24px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .search-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 10px;
+      outline: none;
+    }
+    .search-input:focus { border-color: #52c41a; }
+    .option-item {
+      padding: 10px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    .option-item:hover { background: #f6ffed; }
+    .option-empty { color: #999; text-align: center; padding: 20px 0; font-size: 14px; }
+
+    /* 提示条 */
+    .tip-bar {
+      background: #fffbe6;
+      border: 1px solid #ffe58f;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      color: #d48806;
+      line-height: 1.6;
+    }
+    .power-tip {
+      background: #f6ffed;
+      border-color: #b7eb8f;
+      color: #389e0d;
+      margin-top: 8px;
+    }
+
+    /* 底部按钮 */
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .btn {
+      flex: 1;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(90deg, #52c41a 0%, #389e0d 100%);
+      color: #fff;
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: #f0f5ff;
+      color: #2f54eb;
+    }
+    .btn:hover { opacity: 0.9; }
+
+    /* 报价单弹窗 */
+    .modal-mask {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      padding: 20px;
+    }
+    .quote-modal {
+      background: #fff;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 28px;
+    }
+    .quote-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: #1a1a1a;
+      border-left: 4px solid #52c41a;
+      padding-left: 10px;
+    }
+    .quote-section { margin-bottom: 24px; }
+    .quote-section h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #333;
+    }
+    .quote-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px dashed #e8e8e8;
+      font-size: 15px;
+    }
+    .quote-row:last-child { border-bottom: none; }
+    .quote-row .label { color: #666; }
+    .quote-row .value { color: #333; font-weight: 500; }
+    .price-row .value {
+      color: #f5222d;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .quote-date {
+      font-size: 13px;
+      color: #999;
+      margin-bottom: 12px;
+    }
+    .modal-close {
+      width: 100%;
+      margin-top: 8px;
+      background: #f5f5f5;
+      color: #666;
+    }
   </style>
 </head>
 <body>
-<div id="app" class="app-container">
-  <div v-if="!isLoggedIn" class="login-overlay">
-    <div class="login-box">
-      <h2 style="margin-bottom:25px;">🔐 登录报价系统</h2>
-      <input type="text" v-model="loginUsername" placeholder="用户名" />
-      <input type="password" v-model="loginPassword" placeholder="密码" @keyup.enter="doLogin" />
-      <button class="btn btn-primary" style="margin-top:15px;" @click="doLogin">登录</button>
-      <p v-if="loginError" style="color:#dc2626; margin-top:12px;">{{ loginError }}</p>
-    </div>
-  </div>
+  <div id="app" class="container">
+    <h1 class="page-title">DIY报价</h1>
+    <p class="page-subtitle">自定义配置 · 精准报价</p>
 
-  <div v-if="isLoggedIn">
-    <div v-if="dataStatus === 'loading'" class="loading-tip">⏳ 正在加载配件数据...</div>
-    <div v-if="dataStatus === 'error'" class="error-tip">❌ 配件数据加载失败，请检查网络或刷新页面重试</div>
-
-    <div class="reset-btn-container">
-      <button class="btn btn-success" @click="showQuoteModal = true">📋 生成报价单</button>
-      <button class="btn btn-primary" @click="resetAllSelections">🔄 重新报价</button>
-    </div>
-    
-    <div class="quote-panel">
-      <div v-for="cat in quoteCategories" :key="cat.id" class="selector-row">
-        <div class="selector-label">{{ cat.label }}</div>
-        <div class="selector-control">
-          <input type="text" class="cat-search" v-model="catSearchTerms[cat.id]" :placeholder="`🔍 搜索 ${cat.label}`" />
-          <select v-model="selectedItems[cat.id]" @change="handleSelection(cat.id)">
-            <option value="">请选择{{ cat.label }}</option>
-            <option v-for="item in filteredCategoryItems(cat.id)" :key="item.id" :value="item.id">
-              {{ getCategoryPrefix(cat.id) }} {{ item.name }}
-            </option>
-          </select>
-        </div>
-      </div>
-
-      <div class="rent-summary">
-        <div class="rent-options">
-          <div class="rent-card"><div class="label">6期 · 月付</div><div class="price">¥ {{ rent6Period }}</div></div>
-          <div class="rent-card"><div class="label">12期 · 月付 <span class="badge">95折</span></div><div class="price">¥ {{ rent12Period }}</div></div>
-          <div class="rent-card" style="background: rgba(251,191,36,0.15);"><div class="label">12期租送 · 月付</div><div class="price">¥ {{ rentToOwn }}</div></div>
-        </div>
-        <div v-if="autoMatchMessage" class="warning-tip" style="margin-top: 12px;">{{ autoMatchMessage }}</div>
-        <div v-if="powerSuggestion" class="warning-tip" style="margin-top: 8px;">⚡ {{ powerSuggestion }}</div>
-      </div>
-    </div>
-
-    <div v-if="showQuoteModal" class="modal-overlay" @click.self="showQuoteModal = false">
-      <div class="modal-content" ref="quoteModalContent">
-        <div class="modal-header">
-          <h3>📄 租赁配置报价单</h3>
-          <span class="close-btn" @click="showQuoteModal = false">&times;</span>
-        </div>
-        <div class="quote-date">报价日期：{{ currentDate }}</div>
-        <table class="quote-table">
-          <thead><tr><th>配件类别</th><th>型号</th></tr></thead>
-          <tbody>
-            <tr v-for="item in selectedItemsDetail" :key="item.id"><td>{{ item.categoryLabel }}</td><td>{{ item.name }}</td></tr>
-            <tr v-if="selectedItemsDetail.length === 0"><td colspan="2" style="text-align: center; padding: 24px; color: #94a3b8;">暂未选择任何配件</td></tr>
-          </tbody>
-        </table>
-        <div class="device-value-row">
-          <span>📦 设备价值</span>
-          <span>¥ {{ deviceValue }}</span>
-        </div>
-        <div class="rent-summary-modal">
-          <div class="flex">
-            <div class="rent-item-modal"><div>6期 · 月付</div><div class="price">¥ {{ rent6Period }}</div></div>
-            <div class="rent-item-modal"><div>12期 · 月付 <span class="badge">95折</span></div><div class="price">¥ {{ rent12Period }}</div></div>
+    <!-- 配置卡片 -->
+    <div class="config-card">
+      <div v-for="cat in categories" :key="cat.key">
+        <div class="config-item" @click="toggleDropdown(cat.key)">
+          <div class="item-icon">{{ cat.icon }}</div>
+          <div class="item-label">{{ cat.label }}</div>
+          <div class="item-value" :class="{ selected: selectedItems[cat.key] }">
+            {{ selectedItems[cat.key]?.name || '请选择' + cat.label }}
           </div>
-          <div style="color: #cbd5e1; text-align: center; margin-top: 12px;">* 本报价单有效期至 {{ expiryDate }}</div>
+          <div class="item-arrow">›</div>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" @click="saveQuoteAsImage">📸 保存为图片</button>
-          <button class="btn" @click="showQuoteModal = false">关闭</button>
+
+        <!-- 下拉搜索面板 -->
+        <div v-if="activeDropdown === cat.key" class="dropdown-panel">
+          <input 
+            v-model="searchKeywords[cat.key]" 
+            class="search-input" 
+            :placeholder="'搜索' + cat.label + '...'"
+            @click.stop
+          />
+          <div v-if="filteredParts(cat.key).length === 0" class="option-empty">暂无匹配结果</div>
+          <div 
+            v-for="item in filteredParts(cat.key)" 
+            :key="item.id"
+            class="option-item"
+            @click="selectItem(cat.key, item)"
+          >
+            {{ item.name }}
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- 提示区域 -->
+    <div class="tip-bar" v-if="missingRequired.length > 0">
+      ⚠️ 请选择必选项：{{ missingRequired.map(c => c.label).join('、') }}
+    </div>
+    <div class="tip-bar power-tip" v-if="totalPower > 0">
+      ⚡ 建议电源 ≥ {{ Math.ceil(totalPower * 1.3) }}W
+    </div>
+
+    <!-- 底部按钮 -->
+    <div class="btn-group">
+      <button class="btn btn-primary" :disabled="missingRequired.length > 0" @click="generateQuote">
+        提交报价
+      </button>
+      <button class="btn btn-secondary" @click="resetConfig">
+        重置
+      </button>
+    </div>
+
+    <!-- 报价单弹窗 -->
+    <div class="modal-mask" v-if="showQuoteModal" @click.self="showQuoteModal = false">
+      <div class="quote-modal">
+        <div class="quote-section">
+          <h3 class="quote-title">DIY配置</h3>
+          <div class="quote-row" v-for="cat in categories" :key="cat.key">
+            <span class="label">{{ cat.label }}：</span>
+            <span class="value">{{ selectedItems[cat.key]?.name || '未选择' }}</span>
+          </div>
+        </div>
+
+        <div class="quote-section">
+          <h3 class="quote-title">DIY配置价格</h3>
+          <div class="quote-date">报价日期：{{ today }}（有效期为：1天）</div>
+          
+          <div class="quote-row price-row">
+            <span class="label">长租月单价（6期可退）：</span>
+            <span class="value">{{ price6 }} 元/期</span>
+          </div>
+          <div class="quote-row price-row">
+            <span class="label">一年固定租：</span>
+            <span class="value">{{ price12 }} 元/期</span>
+          </div>
+          <div class="quote-row price-row">
+            <span class="label">12期租满送：</span>
+            <span class="value">{{ price12Send }} 元/期</span>
+          </div>
+          <div class="quote-row price-row">
+            <span class="label">24期租满送：</span>
+            <span class="value">{{ price24Send }} 元/期</span>
+          </div>
+        </div>
+
+        <button class="btn modal-close" @click="showQuoteModal = false">关闭</button>
+      </div>
+    </div>
   </div>
-</div>
 
-<script>
-  const { createApp, ref, reactive, computed } = Vue;
+  <script>
+    const { createApp, reactive, computed, onMounted } = Vue;
+    const API_BASE = "https://api.xszd.cc.cd"; // 替换为你的接口域名
 
-  // ===== 配置区（必须与后台完全一致）=====
-  const API_BASE = 'https://api.xszd.cc.cd';
+    createApp({
+      setup() {
+        // 分类配置：icon、名称、键名、是否必选
+        const categories = [
+          { key: 'cpu', label: 'CPU', icon: '🖥️', required: true },
+          { key: 'cooler', label: '散热器', icon: '🌬️', required: true },
+          { key: 'motherboard', label: '主板', icon: '💾', required: true },
+          { key: 'memory', label: '内存', icon: '📟', required: true },
+          { key: 'ssd', label: '固态硬盘', icon: '💽', required: true },
+          { key: 'gpu', label: '显卡', icon: '🎮', required: true },
+          { key: 'power', label: '电源', icon: '⚡', required: true },
+          { key: 'case', label: '机箱', icon: '🗄️', required: true },
+          { key: 'fan', label: '机箱风扇', icon: '🌀', required: false },
+          { key: 'hdd', label: '机械硬盘', icon: '💿', required: false },
+          { key: 'monitor', label: '显示器', icon: '🖥️', required: true },
+          { key: 'other', label: '其他', icon: '⚙️', required: true },
+        ];
 
-  const defaultCategories = [
-    { id: 'cpu', name: 'CPU', label: 'CPU' }, { id: 'gpu', name: '显卡', label: '显卡' },
-    { id: 'motherboard', name: '主板', label: '主板' }, { id: 'memory', name: '内存', label: '内存' },
-    { id: 'power', name: '电源', label: '电源' }, { id: 'case', name: '机箱', label: '机箱' },
-    { id: 'ssd', name: '固态硬盘', label: '固态硬盘' }, { id: 'hdd', name: '机械硬盘', label: '机械硬盘' },
-    { id: 'cooler', name: '散热器', label: '散热器' }, { id: 'fan', name: '机箱风扇', label: '机箱风扇' },
-    { id: 'monitor', name: '显示器', label: '显示器' }, { id: 'other', name: '其他', label: '其他' }
-  ];
+        const partsData = reactive({}); // 所有配件数据
+        const selectedItems = reactive({}); // 已选中的配件
+        const activeDropdown = reactive({ value: null }); // 当前展开的下拉
+        const searchKeywords = reactive({}); // 每个分类的搜索关键词
+        const showQuoteModal = reactive({ value: false });
 
-  const app = createApp({
-    setup() {
-      const isLoggedIn = ref(false);
-      const loginUsername = ref('');
-      const loginPassword = ref('');
-      const loginError = ref('');
-      const dataStatus = ref('idle'); // idle / loading / error
+        // 初始化搜索关键词
+        categories.forEach(c => searchKeywords[c.key] = '');
 
-      const autoMatchMessage = ref('');
-      const showQuoteModal = ref(false);
-      const quoteModalContent = ref(null);
-      const allCategories = ref(defaultCategories);
-      const itemsData = ref({}); // 改用 ref 保证响应式
-      
-      const catSearchTerms = reactive({});
-      allCategories.value.forEach(c => catSearchTerms[c.id] = '');
+        // 切换下拉展开
+        const toggleDropdown = (key) => {
+          activeDropdown.value = activeDropdown.value === key ? null : key;
+          searchKeywords[key] = ''; // 展开时清空搜索
+        };
 
-      const selectedItems = reactive({
-        cpu: '', gpu: '', motherboard: '', memory: '', power: '', case: '',
-        ssd: '', hdd: '', cooler: '', fan: '', monitor: '', other: ''
-      });
+        // 过滤配件
+        const filteredParts = (key) => {
+          const list = partsData[key] || [];
+          const keyword = searchKeywords[key].toLowerCase();
+          if (!keyword) return list;
+          return list.filter(item => item.name.toLowerCase().includes(keyword));
+        };
 
-      const currentDate = computed(() => new Date().toLocaleDateString('zh-CN'));
-      const expiryDate = computed(() => {
-        const d = new Date(); d.setDate(d.getDate() + 7);
-        return d.toLocaleDateString('zh-CN');
-      });
+        // 选中配件
+        const selectItem = (key, item) => {
+          selectedItems[key] = item;
+          activeDropdown.value = null;
+        };
 
-      // 登录 API 验证
-      async function doLogin() {
-        const u = loginUsername.value.trim();
-        const p = loginPassword.value.trim();
-        if (!u || !p) { loginError.value = '请输入用户名和密码'; return; }
-        loginError.value = '';
-        try {
-          const res = await fetch(`${API_BASE}/api/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: u, password: p })
-          });
-          if (res.ok) {
-            isLoggedIn.value = true;
-            loginError.value = '';
-            await loadFromStorage();
-          } else {
-            loginError.value = '用户名或密码错误';
-          }
-        } catch(e) {
-          loginError.value = '网络错误，请检查网络连接后重试';
-        }
-      }
+        // 计算总成本
+        const totalCost = computed(() => {
+          return categories.reduce((sum, cat) => {
+            return sum + (selectedItems[cat.key]?.cost || 0);
+          }, 0);
+        });
 
-      // 从 KV 加载配件数据（核心修复）
-      async function loadFromStorage() {
-        dataStatus.value = 'loading';
-        try {
-          const res = await fetch(`${API_BASE}/api/data`);
-          if (res.ok) {
-            const remote = await res.json();
-            // 兼容两种返回结构
-            const parts = remote.parts ? remote.parts : remote;
-            if (parts && Object.keys(parts).length > 0) {
-              itemsData.value = parts; // 整体替换，触发响应式
-              dataStatus.value = 'idle';
-            } else {
-              dataStatus.value = 'error';
+        // 计算总功耗
+        const totalPower = computed(() => {
+          return categories.reduce((sum, cat) => {
+            const item = selectedItems[cat.key];
+            return sum + (item?.power || item?.tdp || item?.watt || 0);
+          }, 0);
+        });
+
+        // 未选的必选项
+        const missingRequired = computed(() => {
+          return categories.filter(cat => cat.required && !selectedItems[cat.key]);
+        });
+
+        // 价格计算
+        const price6 = computed(() => Math.round(totalCost.value / 6));
+        const price12 = computed(() => Math.round(totalCost.value / 12));
+        const price12Send = computed(() => Math.round((totalCost.value * 1.5) / 12));
+        const price24Send = computed(() => Math.round((totalCost.value * 1.8) / 24));
+
+        // 今日日期
+        const today = computed(() => {
+          const d = new Date();
+          return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        });
+
+        // 生成报价单
+        const generateQuote = () => {
+          if (missingRequired.value.length > 0) return;
+          showQuoteModal.value = true;
+        };
+
+        // 重置配置
+        const resetConfig = () => {
+          categories.forEach(c => selectedItems[c.key] = null);
+          activeDropdown.value = null;
+        };
+
+        // 从后端加载配件数据
+        onMounted(async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/data`);
+            const data = await res.json();
+            if (data.parts) {
+              Object.assign(partsData, data.parts);
             }
-          } else {
-            dataStatus.value = 'error';
+          } catch (e) {
+            console.error('加载配件数据失败', e);
           }
-        } catch(e) {
-          dataStatus.value = 'error';
-          console.error('加载数据失败', e);
-        }
-        // 补全分类
-        allCategories.value.forEach(c => {
-          if (!itemsData.value[c.id]) itemsData.value[c.id] = [];
         });
+
+        return {
+          categories,
+          selectedItems,
+          activeDropdown,
+          searchKeywords,
+          filteredParts,
+          toggleDropdown,
+          selectItem,
+          totalCost,
+          totalPower,
+          missingRequired,
+          price6,
+          price12,
+          price12Send,
+          price24Send,
+          today,
+          showQuoteModal,
+          generateQuote,
+          resetConfig,
+        };
       }
-
-      const quoteCategories = computed(() => allCategories.value);
-      
-      const filteredCategoryItems = (catId) => {
-        const list = itemsData.value[catId] || [];
-        const term = catSearchTerms[catId] || '';
-        return term 
-          ? list.filter(item => item.name.toLowerCase().includes(term.toLowerCase())) 
-          : list;
-      };
-
-      const getCategoryPrefix = (catId) => 
-        `[${allCategories.value.find(c=>c.id===catId)?.label || catId}]`;
-
-      const totalCost = computed(() => {
-        let sum = 0;
-        allCategories.value.forEach(cat => {
-          const sel = selectedItems[cat.id];
-          if (sel) {
-            const item = (itemsData.value[cat.id] || []).find(it => it.id === sel);
-            if (item) sum += Number(item.cost) || 0;
-          }
-        });
-        return sum;
-      });
-
-      const rent6Period = computed(() => Math.round(totalCost.value / 15));
-      const rent12Period = computed(() => Math.round(rent6Period.value * 0.95));
-      const rentToOwn = computed(() => Math.round(totalCost.value * 1.5 / 12));
-      const deviceValue = computed(() => Math.round(totalCost.value * 1.45));
-
-      const selectedItemsDetail = computed(() => {
-        const details = [];
-        allCategories.value.forEach(cat => {
-          const selId = selectedItems[cat.id];
-          if (selId) {
-            const item = (itemsData.value[cat.id] || []).find(it => it.id === selId);
-            if (item) details.push({ id: item.id, categoryLabel: cat.label, name: item.name });
-          }
-        });
-        return details;
-      });
-
-      const performAutoMatch = () => {
-        autoMatchMessage.value = '';
-        const cpuId = selectedItems.cpu, gpuId = selectedItems.gpu;
-        if (!cpuId) return;
-        const cpu = (itemsData.value.cpu || []).find(c => c.id === cpuId);
-        if (!cpu) return;
-        const gpu = gpuId ? (itemsData.value.gpu || []).find(g => g.id === gpuId) : null;
-        const tdp = cpu.tdp || 65, gpuPwr = gpu?.power || 0, totalPower = tdp + gpuPwr;
-
-        let chipset = '';
-        if (cpu.socket === 'LGA1700') 
-          chipset = totalPower > 600 ? 'B660' : (totalPower <= 550 ? 'H610' : 'B660');
-        else if (cpu.socket === 'LGA1200') 
-          chipset = totalPower > 500 ? 'B560' : 'H510';
-        else if (cpu.socket === 'AM4') chipset = 'B550';
-        else if (cpu.socket === 'AM5') chipset = 'B650';
-        
-        if (chipset) {
-          const compat = (itemsData.value.motherboard || []).filter(mb => 
-            mb.socket === cpu.socket && mb.name.includes(chipset)
-          );
-          if (compat.length) {
-            const best = compat.sort((a,b) => a.cost - b.cost)[0];
-            if (!selectedItems.motherboard || !compat.some(mb => mb.id === selectedItems.motherboard)) {
-              selectedItems.motherboard = best.id;
-              autoMatchMessage.value += `✅ 主板: ${best.name} ；`;
-            }
-          }
-        }
-
-        const coolers = itemsData.value.cooler || [];
-        const suitable = coolers.filter(c => (c.coolingTdp||0) >= tdp).sort((a,b) => a.cost - b.cost)[0];
-        if (suitable) {
-          selectedItems.cooler = suitable.id;
-          autoMatchMessage.value += `散热: ${suitable.name} ；`;
-        }
-
-        const recWatt = Math.ceil((tdp + gpuPwr + 60)/50)*50;
-        const psus = itemsData.value.power || [];
-        const bestPsu = psus.filter(p => p.watt >= recWatt).sort((a,b)=>a.watt-b.watt)[0];
-        if (bestPsu) {
-          selectedItems.power = bestPsu.id;
-          autoMatchMessage.value += `电源: ${bestPsu.name} ；`;
-        }
-
-        if (!autoMatchMessage.value) autoMatchMessage.value = '已是最佳匹配';
-      };
-
-      const powerSuggestion = computed(() => {
-        const cpuId = selectedItems.cpu, gpuId = selectedItems.gpu;
-        if (!cpuId) return '';
-        const cpu = (itemsData.value.cpu||[]).find(c=>c.id===cpuId);
-        const gpu = gpuId ? (itemsData.value.gpu||[]).find(g=>g.id===gpuId) : null;
-        const tdp = cpu?.tdp||65, gpuPwr = gpu?.power||0;
-        const rec = Math.ceil((tdp+gpuPwr+60)/50)*50;
-        const best = (itemsData.value.power||[]).filter(p=>p.watt>=rec).sort((a,b)=>a.watt-b.watt)[0];
-        return best ? `推荐电源: ${best.name} (≥${rec}W)` : `建议电源≥${rec}W`;
-      });
-
-      const handleSelection = (catId) => {
-        if (catId === 'cpu' || catId === 'gpu') performAutoMatch();
-      };
-
-      const resetAllSelections = () => {
-        Object.keys(selectedItems).forEach(k => selectedItems[k] = '');
-        autoMatchMessage.value = '';
-      };
-
-      const saveQuoteAsImage = async () => {
-        if (!quoteModalContent.value) return;
-        try {
-          const canvas = await html2canvas(quoteModalContent.value, { 
-            scale: 2, 
-            backgroundColor: '#ffffff' 
-          });
-          const link = document.createElement('a');
-          link.download = `租赁报价单_${new Date().toISOString().slice(0,10)}.png`;
-          link.href = canvas.toDataURL('image/png');
-          link.click();
-        } catch (err) { alert('截图失败，请重试'); }
-      };
-
-      return {
-        isLoggedIn, loginUsername, loginPassword, loginError, doLogin,
-        quoteCategories, catSearchTerms, selectedItems,
-        rent6Period, rent12Period, rentToOwn, deviceValue,
-        powerSuggestion, autoMatchMessage, showQuoteModal, quoteModalContent,
-        selectedItemsDetail, currentDate, expiryDate,
-        filteredCategoryItems, getCategoryPrefix,
-        handleSelection, resetAllSelections, saveQuoteAsImage,
-        dataStatus
-      };
-    }
-  });
-  app.mount('#app');
-</script>
+    }).mount('#app');
+  </script>
 </body>
 </html>
