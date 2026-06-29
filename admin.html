@@ -14,7 +14,7 @@
       margin-bottom: 24px;
     }
     .header h1 { font-size: 24px; color: #1a1a1a; }
-    .header-actions { display: flex; gap: 12px; }
+    .header-actions { display: flex; gap: 12px; align-items: center; }
     .btn {
       padding: 10px 20px; border: none; border-radius: 8px;
       cursor: pointer; font-size: 14px; font-weight: 500;
@@ -22,6 +22,9 @@
     .btn-primary { background: #52c41a; color: #fff; }
     .btn-danger { background: #f5222d; color: #fff; }
     .btn-default { background: #fff; border: 1px solid #d9d9d9; color: #333; }
+    .btn-upload {
+      background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff;
+    }
     .tip-bar {
       background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322;
       padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;
@@ -29,6 +32,11 @@
     .success-bar {
       background: #f6ffed; border: 1px solid #b7eb8f; color: #389e0d;
       padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;
+    }
+    .import-bar {
+      background: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff;
+      padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;
+      display: flex; gap: 16px; align-items: center;
     }
 
     /* 分类卡片 */
@@ -67,6 +75,12 @@
       padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.04);
     }
     .login-box h2 { text-align: center; margin-bottom: 24px; }
+    .login-input {
+      width: 100%; padding: 14px 16px; border: 1px solid #e8e8e8;
+      border-radius: 10px; font-size: 15px; margin-bottom: 16px; outline: none;
+    }
+    .login-input:focus { border-color: #52c41a; }
+    .login-error { color: #f5222d; font-size: 13px; margin-bottom: 16px; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -84,6 +98,11 @@
       <div class="header">
         <h1>📦 配件库维护 & 用户管理</h1>
         <div class="header-actions">
+          <button class="btn btn-default" @click="downloadTemplate">📥 下载模板 (CSV)</button>
+          <label class="btn btn-upload">
+            📤 上传导入
+            <input type="file" accept=".csv" style="display:none" @change="handleImport" />
+          </label>
           <button class="btn btn-danger" @click="resetParts">清空配件库</button>
           <button class="btn btn-primary" @click="saveParts">保存修改</button>
           <button class="btn btn-default" @click="handleLogout">退出</button>
@@ -92,6 +111,7 @@
 
       <div v-if="saveError" class="tip-bar">{{ saveError }}</div>
       <div v-if="saveSuccess" class="success-bar">保存成功！</div>
+      <div v-if="importTip" class="import-bar">{{ importTip }}</div>
 
       <!-- CPU 分类 -->
       <div class="category-card">
@@ -177,7 +197,7 @@
         </table>
       </div>
 
-      <!-- 其他分类（保持原样） -->
+      <!-- 显卡分类 -->
       <div class="category-card">
         <div class="category-title">
           <span>显卡</span>
@@ -203,6 +223,7 @@
         </table>
       </div>
 
+      <!-- 散热器分类 -->
       <div class="category-card">
         <div class="category-title">
           <span>散热器</span>
@@ -228,6 +249,7 @@
         </table>
       </div>
 
+      <!-- 固态硬盘分类 -->
       <div class="category-card">
         <div class="category-title">
           <span>固态硬盘</span>
@@ -251,6 +273,7 @@
         </table>
       </div>
 
+      <!-- 电源分类 -->
       <div class="category-card">
         <div class="category-title">
           <span>电源</span>
@@ -276,6 +299,7 @@
         </table>
       </div>
 
+      <!-- 机箱分类 -->
       <div class="category-card">
         <div class="category-title">
           <span>机箱</span>
@@ -299,6 +323,7 @@
         </table>
       </div>
 
+      <!-- 机箱风扇分类 -->
       <div class="category-card">
         <div class="category-title">
           <span>机箱风扇</span>
@@ -322,6 +347,7 @@
         </table>
       </div>
 
+      <!-- 机械硬盘分类 -->
       <div class="category-card">
         <div class="category-title">
           <span>机械硬盘</span>
@@ -345,6 +371,7 @@
         </table>
       </div>
 
+      <!-- 显示器分类 -->
       <div class="category-card">
         <div class="category-title">
           <span>显示器</span>
@@ -368,6 +395,7 @@
         </table>
       </div>
 
+      <!-- 其他配件分类 -->
       <div class="category-card">
         <div class="category-title">
           <span>其他配件</span>
@@ -396,7 +424,38 @@
   <script>
     const { createApp, reactive, ref, onMounted } = Vue;
     const API_BASE = "https://api.xszd.cc.cd";
-    const ADMIN_TOKEN = "marryme"; // 和后端保持一致
+    const ADMIN_TOKEN = "marryme"; // 请替换为你自己的管理员密码
+
+    // 各分类字段定义（用于CSV导入导出）
+    const CATEGORY_FIELDS = {
+      cpu: ['id', 'name', 'cost', 'socket', 'tdp', 'matchMb'],
+      motherboard: ['id', 'name', 'cost', 'socket', 'matchMem'],
+      memory: ['id', 'name', 'cost', 'spec'],
+      gpu: ['id', 'name', 'cost', 'power'],
+      cooler: ['id', 'name', 'cost', 'coolingTdp'],
+      ssd: ['id', 'name', 'cost'],
+      power: ['id', 'name', 'cost', 'watt'],
+      case: ['id', 'name', 'cost'],
+      fan: ['id', 'name', 'cost'],
+      hdd: ['id', 'name', 'cost'],
+      monitor: ['id', 'name', 'cost'],
+      other: ['id', 'name', 'cost']
+    };
+
+    const CATEGORY_NAMES = {
+      cpu: 'CPU',
+      motherboard: '主板',
+      memory: '内存',
+      gpu: '显卡',
+      cooler: '散热器',
+      ssd: '固态硬盘',
+      power: '电源',
+      case: '机箱',
+      fan: '机箱风扇',
+      hdd: '机械硬盘',
+      monitor: '显示器',
+      other: '其他配件'
+    };
 
     createApp({
       setup() {
@@ -405,6 +464,7 @@
         const loginError = ref('');
         const saveError = ref('');
         const saveSuccess = ref(false);
+        const importTip = ref('');
 
         // 配件数据结构
         const parts = reactive({
@@ -413,7 +473,7 @@
           fan: [], hdd: [], monitor: [], other: []
         });
 
-        // 登录
+        // ========== 登录相关 ==========
         const handleLogin = () => {
           if (adminPassword.value === ADMIN_TOKEN) {
             isLoggedIn.value = true;
@@ -430,7 +490,7 @@
           adminPassword.value = '';
         };
 
-        // 加载配件数据
+        // ========== 数据加载与保存 ==========
         const loadParts = async () => {
           try {
             const res = await fetch(`${API_BASE}/api/data`);
@@ -443,10 +503,10 @@
           }
         };
 
-        // 保存配件数据
         const saveParts = async () => {
           saveError.value = '';
           saveSuccess.value = false;
+          importTip.value = '';
           try {
             const res = await fetch(`${API_BASE}/api/parts`, {
               method: 'POST',
@@ -468,11 +528,10 @@
           }
         };
 
-        // 新增配件
+        // ========== 新增/删除配件 ==========
         const addPart = (category) => {
           const id = Date.now() + Math.random().toString(36).slice(2,6);
           const newItem = { id, name: '新配件', cost: 0 };
-          // 对应分类补充默认字段
           if (category === 'cpu') {
             Object.assign(newItem, { socket: '', tdp: 0, matchMb: '' });
           } else if (category === 'motherboard') {
@@ -489,14 +548,12 @@
           parts[category].push(newItem);
         };
 
-        // 删除配件
         const deletePart = (category, index) => {
           if (confirm('确定删除这条配件吗？')) {
             parts[category].splice(index, 1);
           }
         };
 
-        // 重置配件库
         const resetParts = () => {
           if (confirm('确定清空所有配件数据吗？此操作不可恢复！')) {
             Object.keys(parts).forEach(key => parts[key] = []);
@@ -504,6 +561,160 @@
           }
         };
 
+        // ========== CSV 工具函数 ==========
+        const escapeCsv = (val) => {
+          if (val == null) return '';
+          const str = String(val);
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return '"' + str.replace(/"/g, '""') + '"';
+          }
+          return str;
+        };
+
+        const parseCsvLine = (line) => {
+          const result = [];
+          let current = '';
+          let inQuotes = false;
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+              if (inQuotes && line[i+1] === '"') {
+                current += '"';
+                i++;
+              } else {
+                inQuotes = !inQuotes;
+              }
+            } else if (char === ',' && !inQuotes) {
+              result.push(current);
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          result.push(current);
+          return result;
+        };
+
+        // ========== 下载模板 ==========
+        const downloadTemplate = () => {
+          let csvContent = '分类,名称,成本,插槽,TDP,匹配主板,匹配内存规格,内存规格,功耗,散热能力,额定功率\n';
+          // 给一行示例
+          csvContent += 'cpu,Intel i5-12400F,850,LGA1700,65,华硕 B660M-K,,,,,\n';
+          csvContent += 'motherboard,华硕 B660M-K,420,LGA1700,,DDR4,,,,\n';
+          csvContent += 'memory,金士顿 16G DDR4,280,,,DDR4,,,\n';
+
+          const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = '配件库导入模板.csv';
+          link.click();
+          importTip.value = '模板已下载，请按格式填写后上传导入';
+          setTimeout(() => importTip.value = '', 3000);
+        };
+
+        // ========== 导出CSV ==========
+        const exportCsv = () => {
+          let rows = [];
+          // 表头
+          rows.push(['分类', '名称', '成本', '插槽', 'TDP', '匹配主板', '匹配内存规格', '内存规格', '功耗', '散热能力', '额定功率']);
+
+          Object.keys(CATEGORY_FIELDS).forEach(cat => {
+            parts[cat].forEach(item => {
+              const row = [
+                CATEGORY_NAMES[cat],
+                item.name || '',
+                item.cost || 0,
+                item.socket || '',
+                item.tdp || '',
+                item.matchMb || '',
+                item.matchMem || '',
+                item.spec || '',
+                item.power || '',
+                item.coolingTdp || '',
+                item.watt || ''
+              ];
+              rows.push(row.map(escapeCsv));
+            });
+          });
+
+          const csvContent = rows.map(row => row.join(',')).join('\n');
+          const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `配件库完整数据_${new Date().toLocaleDateString()}.csv`;
+          link.click();
+        };
+
+        // ========== 导入CSV ==========
+        const handleImport = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            try {
+              const text = event.target.result;
+              const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+              if (lines.length < 2) {
+                alert('CSV文件内容为空');
+                return;
+              }
+
+              // 跳过表头
+              const dataLines = lines.slice(1);
+              let importCount = 0;
+
+              dataLines.forEach(line => {
+                const cols = parseCsvLine(line);
+                if (cols.length < 3) return;
+
+                const catName = cols[0].trim();
+                // 分类名映射回key
+                let catKey = null;
+                for (const [key, name] of Object.entries(CATEGORY_NAMES)) {
+                  if (name === catName || key === catName) {
+                    catKey = key;
+                    break;
+                  }
+                }
+                if (!catKey) return;
+
+                const id = Date.now() + Math.random().toString(36).slice(2,6);
+                const item = { id, name: cols[1].trim(), cost: Number(cols[2]) || 0 };
+
+                // 按分类填充对应字段
+                if (catKey === 'cpu') {
+                  item.socket = cols[3] || '';
+                  item.tdp = Number(cols[4]) || 0;
+                  item.matchMb = cols[5] || '';
+                } else if (catKey === 'motherboard') {
+                  item.socket = cols[3] || '';
+                  item.matchMem = cols[6] || '';
+                } else if (catKey === 'memory') {
+                  item.spec = cols[7] || '';
+                } else if (catKey === 'gpu') {
+                  item.power = Number(cols[8]) || 0;
+                } else if (catKey === 'cooler') {
+                  item.coolingTdp = Number(cols[9]) || 0;
+                } else if (catKey === 'power') {
+                  item.watt = Number(cols[10]) || 0;
+                }
+
+                parts[catKey].push(item);
+                importCount++;
+              });
+
+              importTip.value = `导入成功！共导入 ${importCount} 条配件，请点击「保存修改」同步到服务器`;
+              e.target.value = ''; // 重置文件输入
+            } catch (err) {
+              console.error(err);
+              alert('导入失败，请检查CSV格式是否正确');
+            }
+          };
+          reader.readAsText(file, 'UTF-8');
+        };
+
+        // ========== 初始化 ==========
         onMounted(() => {
           if (localStorage.getItem('admin_token') === ADMIN_TOKEN) {
             isLoggedIn.value = true;
@@ -512,9 +723,10 @@
         });
 
         return {
-          isLoggedIn, adminPassword, loginError, saveError, saveSuccess,
+          isLoggedIn, adminPassword, loginError, saveError, saveSuccess, importTip,
           parts, handleLogin, handleLogout, loadParts, saveParts,
-          addPart, deletePart, resetParts
+          addPart, deletePart, resetParts,
+          downloadTemplate, handleImport, exportCsv
         };
       }
     }).mount('#app');
