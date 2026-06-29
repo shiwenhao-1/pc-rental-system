@@ -335,28 +335,53 @@
           searchKeywords[key] = '';
         };
 
-        // 配件过滤（内存按主板规格自动过滤）
-        const filteredParts = (key) => {
-          let list = partsData[key] || [];
-          
-          // 内存分类：主板指定了规格就先按规格过滤
-          if (key === 'memory' && selectedItems.motherboard?.matchMem) {
-            const spec = selectedItems.motherboard.matchMem.toUpperCase().trim();
-            list = list.filter(item => 
-              item.spec && item.spec.toUpperCase().trim() === spec
-            );
-          }
+// 配件过滤（含主板、散热器、内存三级联动过滤）
+const filteredParts = (key) => {
+  let list = partsData[key] || [];
+  
+  // 主板：选中CPU后自动过滤兼容款
+  if (key === 'motherboard' && selectedItems.cpu) {
+    const cpu = selectedItems.cpu;
+    // 优先级1：手动精确匹配主板名称
+    if (cpu.matchMb && cpu.matchMb.trim()) {
+      const targetName = cpu.matchMb.trim();
+      const matched = list.filter(item => item.name.trim() === targetName);
+      if (matched.length > 0) list = matched;
+    } 
+    // 优先级2：按相同插槽自动兼容过滤
+    else if (cpu.socket) {
+      list = list.filter(item => item.socket === cpu.socket);
+    }
+  }
 
-          const keyword = searchKeywords[key].toLowerCase().trim();
-          if (!keyword) return list;
-          return list.filter(item => item.name.toLowerCase().includes(keyword));
-        };
+  // 散热器：选中CPU后自动过滤够用的型号
+  if (key === 'cooler' && selectedItems.cpu) {
+    const cpu = selectedItems.cpu;
+    // 优先级1：手动精确匹配散热器名称
+    if (cpu.matchCooler && cpu.matchCooler.trim()) {
+      const targetName = cpu.matchCooler.trim();
+      const matched = list.filter(item => item.name.trim() === targetName);
+      if (matched.length > 0) list = matched;
+    } 
+    // 优先级2：按散热能力 ≥ CPU TDP 自动过滤
+    else if (cpu.tdp) {
+      list = list.filter(item => (item.coolingTdp || 0) >= cpu.tdp);
+    }
+  }
 
-        const selectItem = (key, item) => {
-          selectedItems[key] = item;
-          activeDropdown.value = null;
-        };
+  // 内存：选中主板后按规格过滤（原有逻辑保留）
+  if (key === 'memory' && selectedItems.motherboard?.matchMem) {
+    const spec = selectedItems.motherboard.matchMem.toUpperCase().trim();
+    list = list.filter(item => 
+      item.spec && item.spec.toUpperCase().trim() === spec
+    );
+  }
 
+  // 关键词搜索过滤
+  const keyword = searchKeywords[key].toLowerCase().trim();
+  if (!keyword) return list;
+  return list.filter(item => item.name.toLowerCase().includes(keyword));
+};
         // ========== 核心：三级联动匹配规则（手动优先 > 自动匹配） ==========
         // 1. CPU 匹配主板
         const matchMotherboard = (cpuItem) => {
@@ -413,25 +438,31 @@
           }
         };
 
-        // 3. CPU 匹配散热器
-        const matchCooler = (cpuName) => {
-          const coolerList = partsData.cooler || [];
-          if (!cpuName || coolerList.length === 0) return;
+        // 3.优先级1：手动填写的匹配规则
+  if (cpuItem.matchCooler && cpuItem.matchCooler.trim()) {
+    const targetName = cpuItem.matchCooler.trim();
+    const matched = coolerList.find(item => item.name.trim() === targetName);
+    if (matched) {
+      selectedItems.cooler = matched;
+      return; // 手动匹配成功，终止自动匹配
+    }
+  }
 
-          let targetType = '';
-          if (cpuName.includes('i7') || cpuName.toUpperCase().includes('KF')) {
-            targetType = '6热管';
-          } else if (cpuName.includes('i5')) {
-            targetType = '4热管';
-          }
+  // 优先级2：按型号规则自动匹配
+  const cpuName = cpuItem.name;
+  let targetType = '';
+  if (cpuName.includes('i7') || cpuName.toUpperCase().includes('KF')) {
+    targetType = '6热管';
+  } else if (cpuName.includes('i5')) {
+    targetType = '4热管';
+  }
 
-          if (!targetType) return;
-          const matchedCooler = coolerList.find(item => item.name.includes(targetType));
-          if (matchedCooler) {
-            selectedItems.cooler = matchedCooler;
-          }
-        };
-
+  if (!targetType) return;
+  const matchedCooler = coolerList.find(item => item.name.includes(targetType));
+  if (matchedCooler) {
+    selectedItems.cooler = matchedCooler;
+  }
+};
         // 监听联动：CPU变化 → 自动匹配主板+散热器
         watch(() => selectedItems.cpu, (newCpu) => {
           if (newCpu) {
