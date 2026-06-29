@@ -166,7 +166,7 @@
           <button class="btn btn-primary" @click="saveParts">保存修改</button>
         </div>
 
-        <!-- CPU 分类 -->
+        <!-- CPU 分类（新增匹配散热器列） -->
         <div class="category-card">
           <div class="category-title">
             <span>CPU 处理器</span>
@@ -175,12 +175,13 @@
           <table class="table">
             <thead>
               <tr>
-                <th style="width:22%">名称/型号</th>
-                <th style="width:10%">成本 (¥)</th>
-                <th style="width:10%">插槽</th>
-                <th style="width:8%">TDP</th>
-                <th style="width:25%">匹配主板（完整名称）</th>
-                <th style="width:10%">操作</th>
+                <th style="width:18%">名称/型号</th>
+                <th style="width:8%">成本 (¥)</th>
+                <th style="width:8%">插槽</th>
+                <th style="width:6%">TDP</th>
+                <th style="width:20%">匹配主板（完整名称）</th>
+                <th style="width:20%">匹配散热器（完整名称）</th>
+                <th style="width:8%">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -190,6 +191,7 @@
                 <td><input v-model="item.socket" /></td>
                 <td><input v-model.number="item.tdp" type="number" /></td>
                 <td><input v-model="item.matchMb" placeholder="如：华硕 B660M-K" /></td>
+                <td><input v-model="item.matchCooler" placeholder="如：6热管风冷散热器" /></td>
                 <td><button class="btn-danger-small" @click="deletePart('cpu', index)">删除</button></td>
               </tr>
             </tbody>
@@ -521,7 +523,7 @@
 
     // 各分类字段定义（用于CSV导入导出）
     const CATEGORY_FIELDS = {
-      cpu: ['id', 'name', 'cost', 'socket', 'tdp', 'matchMb'],
+      cpu: ['id', 'name', 'cost', 'socket', 'tdp', 'matchMb', 'matchCooler'],
       motherboard: ['id', 'name', 'cost', 'socket', 'matchMem'],
       memory: ['id', 'name', 'cost', 'spec'],
       gpu: ['id', 'name', 'cost', 'power'],
@@ -554,7 +556,7 @@
       setup() {
         // ========== 基础状态 ==========
         const isLoggedIn = ref(false);
-        const activeTab = ref('parts'); // 当前标签页
+        const activeTab = ref('parts');
         const adminPassword = ref('');
         const loginError = ref('');
         const saveError = ref('');
@@ -634,7 +636,7 @@
           const id = Date.now() + Math.random().toString(36).slice(2,6);
           const newItem = { id, name: '新配件', cost: 0 };
           if (category === 'cpu') {
-            Object.assign(newItem, { socket: '', tdp: 0, matchMb: '' });
+            Object.assign(newItem, { socket: '', tdp: 0, matchMb: '', matchCooler: '' });
           } else if (category === 'motherboard') {
             Object.assign(newItem, { socket: '', matchMem: '' });
           } else if (category === 'memory') {
@@ -698,10 +700,10 @@
 
         // ========== CSV：下载模板 ==========
         const downloadTemplate = () => {
-          let csvContent = '分类,名称,成本,插槽,TDP,匹配主板,匹配内存规格,内存规格,功耗,散热能力,额定功率\n';
-          csvContent += 'cpu,Intel i5-12400F,850,LGA1700,65,华硕 B660M-K,,,,,\n';
-          csvContent += 'motherboard,华硕 B660M-K,420,LGA1700,,DDR4,,,,\n';
-          csvContent += 'memory,金士顿 16G DDR4,280,,,DDR4,,,\n';
+          let csvContent = '分类,名称,成本,插槽,TDP,匹配主板,匹配散热器,匹配内存规格,内存规格,功耗,散热能力,额定功率\n';
+          csvContent += 'cpu,Intel i5-12400F,850,LGA1700,65,华硕 B660M-K,4热管风冷散热器,,,,,\n';
+          csvContent += 'motherboard,华硕 B660M-K,420,LGA1700,,,DDR4,,,,\n';
+          csvContent += 'memory,金士顿 16G DDR4,280,,,,,DDR4,,,\n';
 
           const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
           const link = document.createElement('a');
@@ -715,7 +717,7 @@
         // ========== CSV：导出全部数据 ==========
         const exportCsv = () => {
           let rows = [];
-          rows.push(['分类', '名称', '成本', '插槽', 'TDP', '匹配主板', '匹配内存规格', '内存规格', '功耗', '散热能力', '额定功率']);
+          rows.push(['分类', '名称', '成本', '插槽', 'TDP', '匹配主板', '匹配散热器', '匹配内存规格', '内存规格', '功耗', '散热能力', '额定功率']);
 
           Object.keys(CATEGORY_FIELDS).forEach(cat => {
             parts[cat].forEach(item => {
@@ -726,6 +728,7 @@
                 item.socket || '',
                 item.tdp || '',
                 item.matchMb || '',
+                item.matchCooler || '',
                 item.matchMem || '',
                 item.spec || '',
                 item.power || '',
@@ -785,17 +788,18 @@
                   item.socket = cols[3] || '';
                   item.tdp = Number(cols[4]) || 0;
                   item.matchMb = cols[5] || '';
+                  item.matchCooler = cols[6] || '';
                 } else if (catKey === 'motherboard') {
                   item.socket = cols[3] || '';
-                  item.matchMem = cols[6] || '';
+                  item.matchMem = cols[7] || '';
                 } else if (catKey === 'memory') {
-                  item.spec = cols[7] || '';
+                  item.spec = cols[8] || '';
                 } else if (catKey === 'gpu') {
-                  item.power = Number(cols[8]) || 0;
+                  item.power = Number(cols[9]) || 0;
                 } else if (catKey === 'cooler') {
-                  item.coolingTdp = Number(cols[9]) || 0;
+                  item.coolingTdp = Number(cols[10]) || 0;
                 } else if (catKey === 'power') {
-                  item.watt = Number(cols[10]) || 0;
+                  item.watt = Number(cols[11]) || 0;
                 }
 
                 parts[catKey].push(item);
@@ -891,14 +895,11 @@
         });
 
         return {
-          // 基础
           isLoggedIn, activeTab, adminPassword, loginError,
           saveError, saveSuccess, importTip,
           handleLogin, handleLogout,
-          // 配件库
           parts, loadParts, saveParts, addPart, deletePart, resetParts,
           downloadTemplate, handleImport, exportCsv,
-          // 用户管理
           userList, newUser, loadUsers, addUser, deleteUser
         };
       }
