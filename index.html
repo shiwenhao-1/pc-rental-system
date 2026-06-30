@@ -254,7 +254,7 @@
   </div>
 
   <script>
-    const { createApp, reactive, computed, onMounted, ref, watch, nextTick } = Vue;
+    const { createApp, reactive, computed, onMounted, ref, watch } = Vue;
     // ====== 接口地址，和你后台保持一致 ======
     const API_BASE = "https://api.xszd.cc.cd";
 
@@ -399,14 +399,151 @@
         watch(() => selectedItems.cpu, (newCpu) => {
           if (!newCpu) return;
           const mbList = partsData.motherboard || [];
-          if (mbList.length === 0) return;
+          const coolerList = partsData.cooler || [];
 
           // 自动匹配主板
           if (newCpu.matchMb && newCpu.matchMb.trim()) {
             const target = mbList.find(mb => mb.name.trim() === newCpu.matchMb.trim());
-            if (target) {
-              selectedItems.motherboard = target;
-            }
+            if (target) selectedItems.motherboard = target;
           } else if (newCpu.socket) {
             const matched = mbList.find(mb => mb.socket === newCpu.socket);
-            if (matched
+            if (matched) selectedItems.motherboard = matched;
+          }
+
+          // 自动匹配散热器（多值时默认选中第一个）
+          if (newCpu.matchCooler && newCpu.matchCooler.trim()) {
+            const firstMatch = newCpu.matchCooler.split(',')[0].trim();
+            const target = coolerList.find(c => c.name.trim() === firstMatch);
+            if (target) {
+              selectedItems.cooler = target;
+              return;
+            }
+          }
+          if (newCpu.tdp) {
+            const matched = coolerList.find(c => (c.coolingTdp || 0) >= newCpu.tdp);
+            if (matched) selectedItems.cooler = matched;
+          }
+        });
+
+        // 主板变化时自动匹配内存
+        watch(() => selectedItems.motherboard, (newMb) => {
+          if (!newMb || !newMb.matchMem) return;
+          const memList = partsData.memory || [];
+          const spec = newMb.matchMem.toUpperCase().trim();
+          const matched = memList.find(m => m.spec && m.spec.toUpperCase().trim() === spec);
+          if (matched) selectedItems.memory = matched;
+        });
+
+        // ========== 必选项校验 ==========
+        const missingRequired = computed(() => {
+          return categories.filter(c => c.required && !selectedItems[c.key]);
+        });
+
+        // ========== 总功耗计算 ==========
+        const totalPower = computed(() => {
+          let power = 0;
+          if (selectedItems.cpu?.tdp) power += selectedItems.cpu.tdp;
+          if (selectedItems.gpu?.power) power += selectedItems.gpu.power;
+          power += 80; // 主板、内存、硬盘等基础功耗
+          return power;
+        });
+
+        // ========== 总成本计算 ==========
+        const totalCost = computed(() => {
+          let cost = 0;
+          categories.forEach(cat => {
+            if (selectedItems[cat.key]) {
+              cost += Number(selectedItems[cat.key].cost) || 0;
+            }
+          });
+          return cost;
+        });
+
+        // ========== 多期定价公式（严格按规则） ==========
+        // 6期：总成本 / 15
+        const price6 = computed(() => Math.round(totalCost.value / 15));
+        // 12期：6期价格 × 0.95
+        const price12 = computed(() => Math.round(price6.value * 0.95));
+        // 12期租满送：(总成本 × 1.5) / 12
+        const price12Send = computed(() => Math.round((totalCost.value * 1.5) / 12));
+        // 24期租满送：(总成本 × 1.8) / 24
+        const price24Send = computed(() => Math.round((totalCost.value * 1.8) / 24));
+
+        // ========== 日期格式化 ==========
+        const today = computed(() => {
+          const d = new Date();
+          return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+        });
+
+        // ========== 提交报价 ==========
+        const generateQuote = () => {
+          if (missingRequired.value.length > 0) {
+            showMissingTip.value = true;
+            return;
+          }
+          showMissingTip.value = false;
+          showQuoteModal.value = true;
+        };
+
+        // ========== 重置配置 ==========
+        const resetConfig = () => {
+          if (!confirm('确定重置所有已选配置吗？')) return;
+          Object.keys(selectedItems).forEach(key => delete selectedItems[key]);
+          showMissingTip.value = false;
+          showQuoteModal.value = false;
+        };
+
+        // ========== 保存为图片 ==========
+        const saveAsImage = async () => {
+          try {
+            const el = document.getElementById('quoteCard');
+            const canvas = await html2canvas(el, {
+              scale: 2,
+              useCORS: true,
+              backgroundColor: '#ffffff'
+            });
+            const link = document.createElement('a');
+            link.download = `DIY电脑租赁报价_${today.value}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+          } catch (e) {
+            alert('保存图片失败，请重试');
+          }
+        };
+
+        // ========== 加载配件数据 ==========
+        const loadPartsData = async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/data`);
+            const data = await res.json();
+            if (data.parts) {
+              Object.assign(partsData, data.parts);
+            }
+          } catch (e) {
+            console.error('配件数据加载失败', e);
+          }
+        };
+
+        // ========== 初始化 ==========
+        onMounted(() => {
+          // 从会话存储读取登录状态
+          if (sessionStorage.getItem('quote_token')) {
+            isLoggedIn.value = true;
+            loadPartsData();
+          }
+        });
+
+        return {
+          isLoggedIn, loginUsername, loginPassword, loginError, loginLoading,
+          handleLogin, handleLogout,
+          categories, selectedItems, activeDropdown, searchKeywords,
+          filteredParts, toggleDropdown, selectItem,
+          missingRequired, showMissingTip, totalPower,
+          price6, price12, price12Send, price24Send, today,
+          showQuoteModal, generateQuote, resetConfig, saveAsImage
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
