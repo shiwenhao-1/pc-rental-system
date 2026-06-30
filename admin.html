@@ -3,907 +3,410 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>配件库维护 & 用户管理后台</title>
+  <title>DIY电脑租赁报价</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- 报价单转图片依赖库 -->
+  <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #f5f7fa; padding: 30px; }
-    .container { max-width: 1200px; margin: 0 auto; }
+    body {
+      background: linear-gradient(180deg, #f0f9f4 0%, #e8f5ee 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    .container { max-width: 520px; margin: 0 auto; }
 
-    /* 顶部标题栏 */
-    .header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 20px;
-    }
-    .header h1 { font-size: 24px; color: #1a1a1a; }
-    .header-actions { display: flex; gap: 12px; align-items: center; }
-    .btn {
-      padding: 10px 20px; border: none; border-radius: 8px;
-      cursor: pointer; font-size: 14px; font-weight: 500;
-    }
-    .btn-primary { background: #52c41a; color: #fff; }
-    .btn-danger { background: #f5222d; color: #fff; }
-    .btn-default { background: #fff; border: 1px solid #d9d9d9; color: #333; }
-    .btn-upload {
-      background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff;
-    }
-    .btn-small {
-      padding: 6px 14px; font-size: 13px; border-radius: 6px;
-      background: #f0f5ff; color: #2f54eb; border: none; cursor: pointer;
-    }
-    .btn-danger-small {
-      padding: 6px 14px; font-size: 13px; border-radius: 6px;
-      background: none; color: #f5222d; border: none; cursor: pointer;
-    }
-
-    /* 标签切换 */
-    .tabs {
-      display: flex; gap: 4px; margin-bottom: 20px;
-      border-bottom: 2px solid #e8e8e8;
-    }
-    .tab-item {
-      padding: 12px 24px; cursor: pointer; font-size: 15px;
-      color: #666; border-bottom: 2px solid transparent;
-      margin-bottom: -2px; transition: all 0.2s;
-    }
-    .tab-item.active {
-      color: #52c41a; border-bottom-color: #52c41a; font-weight: 500;
-    }
-
-    /* 提示条 */
-    .tip-bar {
-      background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322;
-      padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;
-    }
-    .success-bar {
-      background: #f6ffed; border: 1px solid #b7eb8f; color: #389e0d;
-      padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;
-    }
-    .import-bar {
-      background: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff;
-      padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;
-    }
-
-    /* 分类卡片 */
-    .category-card {
-      background: #fff; border-radius: 12px; padding: 20px;
-      margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    }
-    .category-title {
-      font-size: 18px; font-weight: 600; margin-bottom: 16px;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-
-    /* 表格通用样式 */
-    .table { width: 100%; border-collapse: collapse; }
-    .table th, .table td {
-      padding: 10px 12px; text-align: left; border-bottom: 1px solid #f0f0f0;
-      font-size: 14px;
-    }
-    .table th { background: #fafafa; color: #666; font-weight: 500; }
-    .table input {
-      width: 100%; padding: 6px 10px; border: 1px solid #d9d9d9;
-      border-radius: 6px; font-size: 14px; outline: none;
-    }
-    .table input:focus { border-color: #52c41a; }
-
-    /* 用户管理模块 */
-    .user-card {
-      background: #fff; border-radius: 12px; padding: 24px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    }
-    .user-header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 20px;
-    }
-    .user-header h3 { font-size: 18px; }
-    .add-user-form {
-      display: flex; gap: 12px; margin-bottom: 20px;
-      padding: 16px; background: #fafafa; border-radius: 8px;
-    }
-    .add-user-form input {
-      flex: 1; padding: 8px 12px; border: 1px solid #d9d9d9;
-      border-radius: 6px; outline: none; font-size: 14px;
-    }
-    .add-user-form input:focus { border-color: #52c41a; }
-
-    /* 登录页 */
+    /* 登录页样式 */
     .login-box {
-      max-width: 400px; margin: 100px auto; background: #fff;
-      padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+      background: #fff;
+      border-radius: 20px;
+      padding: 40px 32px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+      margin-top: 80px;
+      text-align: center;
     }
-    .login-box h2 { text-align: center; margin-bottom: 24px; }
+    .login-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .login-subtitle { color: #888; margin-bottom: 32px; font-size: 14px; }
     .login-input {
       width: 100%; padding: 14px 16px; border: 1px solid #e8e8e8;
       border-radius: 10px; font-size: 15px; margin-bottom: 16px; outline: none;
     }
     .login-input:focus { border-color: #52c41a; }
     .login-error { color: #f5222d; font-size: 13px; margin-bottom: 16px; min-height: 18px; }
+    .login-btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(90deg, #52c41a 0%, #389e0d 100%);
+      color: #fff; border: none; border-radius: 10px; font-size: 16px; font-weight: 500; cursor: pointer;
+    }
+    .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* 报价页头部 */
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+    .page-title { font-size: 36px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+    .page-subtitle { color: #888; font-size: 16px; }
+    .logout-btn {
+      padding: 8px 16px; background: #fff; border: 1px solid #e8e8e8;
+      border-radius: 8px; cursor: pointer; font-size: 14px; color: #666;
+    }
+
+    /* 配置卡片 */
+    .config-card {
+      background: #fff; border-radius: 20px; padding: 8px 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px;
+    }
+    .config-item {
+      display: flex; align-items: center; padding: 18px 24px;
+      border-bottom: 1px solid #f2f2f2; cursor: pointer; transition: background 0.2s;
+    }
+    .config-item:last-child { border-bottom: none; }
+    .config-item:hover { background: #fafafa; }
+    .item-icon {
+      width: 32px; height: 32px; margin-right: 16px; color: #52c41a;
+      font-size: 24px; display: flex; align-items: center; justify-content: center;
+    }
+    .item-label { font-size: 17px; color: #333; width: 80px; flex-shrink: 0; }
+    .item-value { flex: 1; text-align: right; font-size: 17px; color: #999; margin-right: 8px; }
+    .item-value.selected { color: #333; font-weight: 500; }
+    .item-arrow { color: #ccc; font-size: 14px; }
+
+    /* 下拉搜索面板 */
+    .dropdown-panel {
+      background: #fff; border-top: 1px solid #f2f2f2;
+      padding: 12px 24px; max-height: 280px; overflow-y: auto;
+    }
+    .search-input {
+      width: 100%; padding: 10px 14px; border: 1px solid #e8e8e8;
+      border-radius: 8px; font-size: 14px; margin-bottom: 10px; outline: none;
+    }
+    .search-input:focus { border-color: #52c41a; }
+    .option-item {
+      padding: 10px 12px; border-radius: 6px; cursor: pointer;
+      font-size: 15px; color: #333; margin-bottom: 4px;
+    }
+    .option-item:hover { background: #f6ffed; }
+    .option-empty { color: #999; text-align: center; padding: 20px 0; font-size: 14px; }
+
+    /* 提示条 */
+    .tip-bar {
+      background: #fffbe6; border: 1px solid #ffe58f; border-radius: 10px;
+      padding: 12px 16px; margin-bottom: 16px; font-size: 14px;
+      color: #d48806; line-height: 1.6; display: none;
+    }
+    .tip-bar.show { display: block; }
+    .power-tip {
+      background: #f6ffed; border-color: #b7eb8f; color: #389e0d;
+      margin-top: 8px; display: block;
+    }
+
+    /* 底部按钮 */
+    .btn-group { display: flex; gap: 12px; margin-top: 20px; }
+    .btn {
+      flex: 1; padding: 16px; border: none; border-radius: 12px;
+      font-size: 16px; font-weight: 500; cursor: pointer; transition: opacity 0.2s;
+    }
+    .btn-primary { background: linear-gradient(90deg, #52c41a 0%, #389e0d 100%); color: #fff; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: #f0f5ff; color: #2f54eb; }
+    .btn:hover { opacity: 0.9; }
+
+    /* 报价单弹窗 */
+    .modal-mask {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+      z-index: 999; padding: 20px;
+    }
+    .quote-modal {
+      background: #fff; border-radius: 16px; width: 100%; max-width: 480px;
+      max-height: 90vh; overflow-y: auto; padding: 28px;
+    }
+    .quote-title {
+      font-size: 22px; font-weight: 700; margin-bottom: 20px; color: #1a1a1a;
+      border-left: 4px solid #52c41a; padding-left: 10px;
+    }
+    .quote-section { margin-bottom: 24px; }
+    .quote-row {
+      display: flex; justify-content: space-between; padding: 10px 0;
+      border-bottom: 1px dashed #e8e8e8; font-size: 15px;
+    }
+    .quote-row:last-child { border-bottom: none; }
+    .quote-row .label { color: #666; }
+    .quote-row .value { color: #333; font-weight: 500; }
+    .price-row .value { color: #f5222d; font-size: 18px; font-weight: 700; }
+    .quote-date { font-size: 13px; color: #999; margin-bottom: 12px; }
+    .modal-btn-group { display: flex; gap: 10px; margin-top: 16px; }
+    .modal-btn { flex: 1; padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-size: 14px; }
+    .btn-save-img { background: #1890ff; color: #fff; }
+    .btn-close { background: #f5f5f5; color: #666; }
   </style>
 </head>
 <body>
   <div id="app" class="container">
-    <!-- 登录页 -->
+
+    <!-- 登录页面 -->
     <div v-if="!isLoggedIn" class="login-box">
-      <h2>🔒 后台管理登录</h2>
-      <input v-model="adminPassword" type="password" class="login-input" placeholder="请输入管理员密码" />
+      <h2 class="login-title">🔒 登录报价系统</h2>
+      <p class="login-subtitle">请输入账号密码登录</p>
+      <input v-model="loginUsername" class="login-input" placeholder="用户名" />
+      <input v-model="loginPassword" type="password" class="login-input" placeholder="密码" />
       <div class="login-error">{{ loginError }}</div>
-      <button class="btn btn-primary" style="width:100%" @click="handleLogin">登录</button>
+      <button class="login-btn" :disabled="loginLoading" @click="handleLogin">
+        {{ loginLoading ? '登录中...' : '登录' }}
+      </button>
     </div>
 
-    <!-- 主界面 -->
+    <!-- 报价主页面 -->
     <div v-else>
-      <div class="header">
-        <h1>⚙️ 租赁系统管理后台</h1>
-        <button class="btn btn-default" @click="handleLogout">退出登录</button>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">DIY报价</h1>
+          <p class="page-subtitle">自定义配置 · 精准报价</p>
+        </div>
+        <button class="logout-btn" @click="handleLogout">退出登录</button>
       </div>
 
-      <!-- 标签切换 -->
-      <div class="tabs">
-        <div class="tab-item" :class="{ active: activeTab === 'parts' }" @click="activeTab = 'parts'">
-          📦 配件库维护
-        </div>
-        <div class="tab-item" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'">
-          👤 用户账号管理
-        </div>
-      </div>
-
-      <!-- 提示信息 -->
-      <div v-if="saveError" class="tip-bar">{{ saveError }}</div>
-      <div v-if="saveSuccess" class="success-bar">操作成功！</div>
-      <div v-if="importTip" class="import-bar">{{ importTip }}</div>
-
-      <!-- ========== 配件库维护标签页 ========== -->
-      <div v-if="activeTab === 'parts'">
-        <div class="header-actions" style="margin-bottom: 20px; justify-content: flex-end;">
-          <button class="btn btn-default" @click="downloadTemplate">📥 下载模板 (CSV)</button>
-          <label class="btn btn-upload">
-            📤 上传导入
-            <input type="file" accept=".csv" style="display:none" @change="handleImport" />
-          </label>
-          <button class="btn btn-default" @click="exportCsv">💾 导出数据</button>
-          <button class="btn btn-danger" @click="resetParts">清空配件库</button>
-          <button class="btn btn-primary" @click="saveParts">保存修改</button>
-        </div>
-
-        <!-- CPU 分类（新增匹配散热器列） -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>CPU 处理器</span>
-            <button class="btn-small" @click="addPart('cpu')">+ 新增</button>
+      <!-- 配置卡片 -->
+      <div class="config-card">
+        <div v-for="cat in categories" :key="cat.key">
+          <div class="config-item" @click="toggleDropdown(cat.key)">
+            <div class="item-icon">{{ cat.icon }}</div>
+            <div class="item-label">{{ cat.label }}</div>
+            <div class="item-value" :class="{ selected: selectedItems[cat.key] }">
+              {{ selectedItems[cat.key]?.name || '请选择' + cat.label }}
+            </div>
+            <div class="item-arrow">›</div>
           </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th style="width:18%">名称/型号</th>
-                <th style="width:8%">成本 (¥)</th>
-                <th style="width:8%">插槽</th>
-                <th style="width:6%">TDP</th>
-                <th style="width:20%">匹配主板（完整名称）</th>
-                <th style="width:20%">匹配散热器（完整名称）</th>
-                <th style="width:8%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.cpu" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><input v-model="item.socket" /></td>
-                <td><input v-model.number="item.tdp" type="number" /></td>
-                <td><input v-model="item.matchMb" placeholder="如：华硕 B660M-K" /></td>
-                <td><input v-model="item.matchCooler" placeholder="如：6热管风冷散热器" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('cpu', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
 
-        <!-- 主板 分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>主板</span>
-            <button class="btn-small" @click="addPart('motherboard')">+ 新增</button>
+          <!-- 下拉搜索面板 -->
+          <div v-if="activeDropdown === cat.key" class="dropdown-panel">
+            <input 
+              v-model="searchKeywords[cat.key]" 
+              class="search-input" 
+              :placeholder="'搜索' + cat.label + '...'"
+              @click.stop
+            />
+            <div v-if="filteredParts(cat.key).length === 0" class="option-empty">暂无匹配结果</div>
+            <div 
+              v-for="item in filteredParts(cat.key)" 
+              :key="item.id"
+              class="option-item"
+              @click="selectItem(cat.key, item)"
+            >
+              {{ item.name }}
+            </div>
           </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th style="width:25%">名称/型号</th>
-                <th style="width:12%">成本 (¥)</th>
-                <th style="width:15%">插槽</th>
-                <th style="width:20%">匹配内存规格</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.motherboard" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><input v-model="item.socket" /></td>
-                <td><input v-model="item.matchMem" placeholder="如：DDR4 / DDR5" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('motherboard', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 内存 分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>内存</span>
-            <button class="btn-small" @click="addPart('memory')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th style="width:30%">名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:20%">内存规格</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.memory" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><input v-model="item.spec" placeholder="如：DDR4 / DDR5" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('memory', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 显卡分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>显卡</span>
-            <button class="btn-small" @click="addPart('gpu')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:15%">功耗(W)</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.gpu" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><input v-model.number="item.power" type="number" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('gpu', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 散热器分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>散热器</span>
-            <button class="btn-small" @click="addPart('cooler')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:15%">散热能力(W)</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.cooler" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><input v-model.number="item.coolingTdp" type="number" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('cooler', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 固态硬盘分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>固态硬盘</span>
-            <button class="btn-small" @click="addPart('ssd')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.ssd" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('ssd', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 电源分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>电源</span>
-            <button class="btn-small" @click="addPart('power')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:15%">额定功率(W)</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.power" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><input v-model.number="item.watt" type="number" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('power', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 机箱分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>机箱</span>
-            <button class="btn-small" @click="addPart('case')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.case" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('case', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 机箱风扇分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>机箱风扇</span>
-            <button class="btn-small" @click="addPart('fan')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.fan" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('fan', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 机械硬盘分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>机械硬盘</span>
-            <button class="btn-small" @click="addPart('hdd')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.hdd" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('hdd', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 显示器分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>显示器</span>
-            <button class="btn-small" @click="addPart('monitor')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.monitor" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('monitor', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 其他配件分类 -->
-        <div class="category-card">
-          <div class="category-title">
-            <span>其他配件</span>
-            <button class="btn-small" @click="addPart('other')">+ 新增</button>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>名称/型号</th>
-                <th style="width:15%">成本 (¥)</th>
-                <th style="width:10%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in parts.other" :key="item.id">
-                <td><input v-model="item.name" /></td>
-                <td><input v-model.number="item.cost" type="number" /></td>
-                <td><button class="btn-danger-small" @click="deletePart('other', index)">删除</button></td>
-              </tr>
-            </tbody>
-          </table>
         </div>
       </div>
 
-      <!-- ========== 用户账号管理标签页 ========== -->
-      <div v-if="activeTab === 'users'">
-        <div class="user-card">
-          <div class="user-header">
-            <h3>👤 登录账号管理</h3>
+      <!-- 提示区域 -->
+      <div class="tip-bar" :class="{ show: showMissingTip }">
+        ⚠️ 请选择必选项：{{ missingRequired.map(c => c.label).join('、') }}
+      </div>
+      <div class="tip-bar power-tip" v-if="totalPower > 0">
+        ⚡ 建议电源 ≥ {{ Math.ceil(totalPower * 1.3) }}W
+      </div>
+
+      <!-- 底部按钮 -->
+      <div class="btn-group">
+        <button class="btn btn-primary" @click="generateQuote">提交报价</button>
+        <button class="btn btn-secondary" @click="resetConfig">重置</button>
+      </div>
+
+      <!-- 报价单弹窗 -->
+      <div class="modal-mask" v-if="showQuoteModal" @click.self="showQuoteModal = false">
+        <div class="quote-modal" id="quoteCard">
+          <div class="quote-section">
+            <h3 class="quote-title">DIY配置</h3>
+            <div class="quote-row" v-for="cat in categories" :key="cat.key">
+              <span class="label">{{ cat.label }}：</span>
+              <span class="value">{{ selectedItems[cat.key]?.name || '未选择' }}</span>
+            </div>
           </div>
 
-          <!-- 新增用户表单 -->
-          <div class="add-user-form">
-            <input v-model="newUser.username" placeholder="请输入用户名" />
-            <input v-model="newUser.password" type="password" placeholder="请输入密码" />
-            <button class="btn btn-primary" @click="addUser">新增账号</button>
+          <div class="quote-section">
+            <h3 class="quote-title">DIY配置价格</h3>
+            <div class="quote-date">报价日期：{{ today }}（有效期为：1天）</div>
+            
+            <div class="quote-row price-row">
+              <span class="label">长租月单价（6期可退）：</span>
+              <span class="value">{{ price6 }} 元/期</span>
+            </div>
+            <div class="quote-row price-row">
+              <span class="label">一年固定租：</span>
+              <span class="value">{{ price12 }} 元/期</span>
+            </div>
+            <div class="quote-row price-row">
+              <span class="label">12期租满送：</span>
+              <span class="value">{{ price12Send }} 元/期</span>
+            </div>
+            <div class="quote-row price-row">
+              <span class="label">24期租满送：</span>
+              <span class="value">{{ price24Send }} 元/期</span>
+            </div>
           </div>
 
-          <!-- 用户列表 -->
-          <table class="table">
-            <thead>
-              <tr>
-                <th>序号</th>
-                <th>用户名</th>
-                <th>密码</th>
-                <th style="width:12%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(user, index) in userList" :key="user.username">
-                <td>{{ index + 1 }}</td>
-                <td>{{ user.username }}</td>
-                <td>{{ user.password }}</td>
-                <td><button class="btn-danger-small" @click="deleteUser(user.username)">删除</button></td>
-              </tr>
-              <tr v-if="userList.length === 0">
-                <td colspan="4" style="text-align:center; color:#999; padding:30px 0;">暂无账号</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="modal-btn-group">
+            <button class="modal-btn btn-save-img" @click="saveAsImage">💾 保存为图片</button>
+            <button class="modal-btn btn-close" @click="showQuoteModal = false">关闭</button>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    const { createApp, reactive, ref, onMounted } = Vue;
+    const { createApp, reactive, computed, onMounted, ref, watch, nextTick } = Vue;
+    // ====== 接口地址，和你后台保持一致 ======
     const API_BASE = "https://api.xszd.cc.cd";
-    const ADMIN_TOKEN = "marryme"; // 请替换为你自己的管理员密码
-
-    // 各分类字段定义（用于CSV导入导出）
-    const CATEGORY_FIELDS = {
-      cpu: ['id', 'name', 'cost', 'socket', 'tdp', 'matchMb', 'matchCooler'],
-      motherboard: ['id', 'name', 'cost', 'socket', 'matchMem'],
-      memory: ['id', 'name', 'cost', 'spec'],
-      gpu: ['id', 'name', 'cost', 'power'],
-      cooler: ['id', 'name', 'cost', 'coolingTdp'],
-      ssd: ['id', 'name', 'cost'],
-      power: ['id', 'name', 'cost', 'watt'],
-      case: ['id', 'name', 'cost'],
-      fan: ['id', 'name', 'cost'],
-      hdd: ['id', 'name', 'cost'],
-      monitor: ['id', 'name', 'cost'],
-      other: ['id', 'name', 'cost']
-    };
-
-    const CATEGORY_NAMES = {
-      cpu: 'CPU',
-      motherboard: '主板',
-      memory: '内存',
-      gpu: '显卡',
-      cooler: '散热器',
-      ssd: '固态硬盘',
-      power: '电源',
-      case: '机箱',
-      fan: '机箱风扇',
-      hdd: '机械硬盘',
-      monitor: '显示器',
-      other: '其他配件'
-    };
 
     createApp({
       setup() {
-        // ========== 基础状态 ==========
-        const isLoggedIn = ref(false);
-        const activeTab = ref('parts');
-        const adminPassword = ref('');
-        const loginError = ref('');
-        const saveError = ref('');
-        const saveSuccess = ref(false);
-        const importTip = ref('');
-
-        // ========== 配件库数据 ==========
-        const parts = reactive({
-          cpu: [], motherboard: [], memory: [], gpu: [],
-          cooler: [], ssd: [], power: [], case: [],
-          fan: [], hdd: [], monitor: [], other: []
-        });
-
-        // ========== 用户管理数据 ==========
-        const userList = ref([]);
-        const newUser = reactive({ username: '', password: '' });
-
         // ========== 登录相关 ==========
-        const handleLogin = () => {
+        const isLoggedIn = ref(false);
+        const loginUsername = ref('');
+        const loginPassword = ref('');
+        const loginError = ref('');
+        const loginLoading = ref(false);
+
+        const handleLogin = async () => {
           loginError.value = '';
-          if (adminPassword.value === ADMIN_TOKEN) {
-            isLoggedIn.value = true;
-            localStorage.setItem('admin_token', ADMIN_TOKEN);
-            loadParts();
-            loadUsers();
-          } else {
-            loginError.value = '密码错误';
+          if (!loginUsername.value || !loginPassword.value) {
+            loginError.value = '请输入用户名和密码';
+            return;
+          }
+          loginLoading.value = true;
+          try {
+            const res = await fetch(`${API_BASE}/api/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: loginUsername.value,
+                password: loginPassword.value
+              })
+            });
+            const data = await res.json();
+            if (data.success) {
+              isLoggedIn.value = true;
+              // 会话级存储：关闭标签页/浏览器自动清除
+              sessionStorage.setItem('quote_token', data.token);
+              loadPartsData();
+            } else {
+              loginError.value = data.message || '登录失败';
+            }
+          } catch (e) {
+            loginError.value = '网络错误，请检查网络连接';
+          } finally {
+            loginLoading.value = false;
           }
         };
 
         const handleLogout = () => {
           isLoggedIn.value = false;
-          localStorage.removeItem('admin_token');
-          adminPassword.value = '';
+          sessionStorage.removeItem('quote_token');
+          loginUsername.value = '';
+          loginPassword.value = '';
         };
 
-        // ========== 配件库：加载/保存 ==========
-        const loadParts = async () => {
-          try {
-            const res = await fetch(`${API_BASE}/api/data`);
-            const data = await res.json();
-            if (data.parts) {
-              Object.assign(parts, data.parts);
-            }
-          } catch (e) {
-            saveError.value = '配件数据加载失败，请检查网络';
-          }
+        // ========== 分类配置 ==========
+        const categories = [
+          { key: 'cpu', label: 'CPU', icon: '🖥️', required: true },
+          { key: 'cooler', label: '散热器', icon: '🌬️', required: true },
+          { key: 'motherboard', label: '主板', icon: '💾', required: true },
+          { key: 'memory', label: '内存', icon: '📟', required: true },
+          { key: 'ssd', label: '固态硬盘', icon: '💽', required: true },
+          { key: 'gpu', label: '显卡', icon: '🎮', required: true },
+          { key: 'power', label: '电源', icon: '⚡', required: true },
+          { key: 'case', label: '机箱', icon: '🗄️', required: true },
+          { key: 'fan', label: '机箱风扇', icon: '🌀', required: false },
+          { key: 'hdd', label: '机械硬盘', icon: '💿', required: false },
+          { key: 'monitor', label: '显示器', icon: '🖥️', required: true },
+          { key: 'other', label: '其他', icon: '⚙️', required: true },
+        ];
+
+        const partsData = reactive({});
+        const selectedItems = reactive({});
+        const activeDropdown = ref(null);
+        const searchKeywords = reactive({});
+        const showQuoteModal = ref(false);
+        const showMissingTip = ref(false);
+
+        categories.forEach(c => searchKeywords[c.key] = '');
+
+        // ========== 下拉交互 ==========
+        const toggleDropdown = (key) => {
+          activeDropdown.value = activeDropdown.value === key ? null : key;
+          searchKeywords[key] = '';
         };
 
-        const saveParts = async () => {
-          saveError.value = '';
-          saveSuccess.value = false;
-          importTip.value = '';
-          try {
-            const res = await fetch(`${API_BASE}/api/parts`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${ADMIN_TOKEN}`
-              },
-              body: JSON.stringify({ parts })
-            });
-            const data = await res.json();
-            if (data.success) {
-              saveSuccess.value = true;
-              setTimeout(() => saveSuccess.value = false, 2000);
-            } else {
-              saveError.value = data.message || '保存失败';
-            }
-          } catch (e) {
-            saveError.value = '网络错误，保存失败';
-          }
+        // 选中配件
+        const selectItem = (key, item) => {
+          selectedItems[key] = item;
+          activeDropdown.value = null;
+          searchKeywords[key] = '';
         };
 
-        // ========== 配件库：新增/删除/清空 ==========
-        const addPart = (category) => {
-          const id = Date.now() + Math.random().toString(36).slice(2,6);
-          const newItem = { id, name: '新配件', cost: 0 };
-          if (category === 'cpu') {
-            Object.assign(newItem, { socket: '', tdp: 0, matchMb: '', matchCooler: '' });
-          } else if (category === 'motherboard') {
-            Object.assign(newItem, { socket: '', matchMem: '' });
-          } else if (category === 'memory') {
-            Object.assign(newItem, { spec: '' });
-          } else if (category === 'gpu') {
-            Object.assign(newItem, { power: 0 });
-          } else if (category === 'cooler') {
-            Object.assign(newItem, { coolingTdp: 0 });
-          } else if (category === 'power') {
-            Object.assign(newItem, { watt: 0 });
-          }
-          parts[category].push(newItem);
-        };
-
-        const deletePart = (category, index) => {
-          if (confirm('确定删除这条配件吗？')) {
-            parts[category].splice(index, 1);
-          }
-        };
-
-        const resetParts = () => {
-          if (confirm('确定清空所有配件数据吗？此操作不可恢复！')) {
-            Object.keys(parts).forEach(key => parts[key] = []);
-            saveParts();
-          }
-        };
-
-        // ========== CSV 工具函数 ==========
-        const escapeCsv = (val) => {
-          if (val == null) return '';
-          const str = String(val);
-          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-            return '"' + str.replace(/"/g, '""') + '"';
-          }
-          return str;
-        };
-
-        const parseCsvLine = (line) => {
-          const result = [];
-          let current = '';
-          let inQuotes = false;
-          for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-            if (char === '"') {
-              if (inQuotes && line[i+1] === '"') {
-                current += '"';
-                i++;
-              } else {
-                inQuotes = !inQuotes;
-              }
-            } else if (char === ',' && !inQuotes) {
-              result.push(current);
-              current = '';
-            } else {
-              current += char;
+        // 配件过滤（含主板、散热器、内存三级联动过滤，散热器支持多值匹配）
+        const filteredParts = (key) => {
+          let list = partsData[key] || [];
+          
+          // 主板：选中CPU后自动过滤兼容款
+          if (key === 'motherboard' && selectedItems.cpu) {
+            const cpu = selectedItems.cpu;
+            // 优先级1：手动精确匹配主板名称
+            if (cpu.matchMb && cpu.matchMb.trim()) {
+              const targetName = cpu.matchMb.trim();
+              const matched = list.filter(item => item.name.trim() === targetName);
+              if (matched.length > 0) list = matched;
+            } 
+            // 优先级2：按相同插槽自动兼容过滤
+            else if (cpu.socket) {
+              list = list.filter(item => item.socket === cpu.socket);
             }
           }
-          result.push(current);
-          return result;
-        };
 
-        // ========== CSV：下载模板 ==========
-        const downloadTemplate = () => {
-          let csvContent = '分类,名称,成本,插槽,TDP,匹配主板,匹配散热器,匹配内存规格,内存规格,功耗,散热能力,额定功率\n';
-          csvContent += 'cpu,Intel i5-12400F,850,LGA1700,65,华硕 B660M-K,4热管风冷散热器,,,,,\n';
-          csvContent += 'motherboard,华硕 B660M-K,420,LGA1700,,,DDR4,,,,\n';
-          csvContent += 'memory,金士顿 16G DDR4,280,,,,,DDR4,,,\n';
-
-          const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-          const link = document.createElement('a');
-          link.href = URL.createObjectURL(blob);
-          link.download = '配件库导入模板.csv';
-          link.click();
-          importTip.value = '模板已下载，请按格式填写后上传导入';
-          setTimeout(() => importTip.value = '', 3000);
-        };
-
-        // ========== CSV：导出全部数据 ==========
-        const exportCsv = () => {
-          let rows = [];
-          rows.push(['分类', '名称', '成本', '插槽', 'TDP', '匹配主板', '匹配散热器', '匹配内存规格', '内存规格', '功耗', '散热能力', '额定功率']);
-
-          Object.keys(CATEGORY_FIELDS).forEach(cat => {
-            parts[cat].forEach(item => {
-              const row = [
-                CATEGORY_NAMES[cat],
-                item.name || '',
-                item.cost || 0,
-                item.socket || '',
-                item.tdp || '',
-                item.matchMb || '',
-                item.matchCooler || '',
-                item.matchMem || '',
-                item.spec || '',
-                item.power || '',
-                item.coolingTdp || '',
-                item.watt || ''
-              ];
-              rows.push(row.map(escapeCsv));
-            });
-          });
-
-          const csvContent = rows.map(row => row.join(',')).join('\n');
-          const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-          const link = document.createElement('a');
-          link.href = URL.createObjectURL(blob);
-          link.download = `配件库完整数据_${new Date().toLocaleDateString()}.csv`;
-          link.click();
-          saveSuccess.value = true;
-          setTimeout(() => saveSuccess.value = false, 2000);
-        };
-
-        // ========== CSV：上传导入 ==========
-        const handleImport = (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            try {
-              const text = event.target.result;
-              const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-              if (lines.length < 2) {
-                alert('CSV文件内容为空');
-                return;
-              }
-
-              const dataLines = lines.slice(1);
-              let importCount = 0;
-
-              dataLines.forEach(line => {
-                const cols = parseCsvLine(line);
-                if (cols.length < 3) return;
-
-                const catName = cols[0].trim();
-                let catKey = null;
-                for (const [key, name] of Object.entries(CATEGORY_NAMES)) {
-                  if (name === catName || key === catName) {
-                    catKey = key;
-                    break;
-                  }
-                }
-                if (!catKey) return;
-
-                const id = Date.now() + Math.random().toString(36).slice(2,6);
-                const item = { id, name: cols[1].trim(), cost: Number(cols[2]) || 0 };
-
-                if (catKey === 'cpu') {
-                  item.socket = cols[3] || '';
-                  item.tdp = Number(cols[4]) || 0;
-                  item.matchMb = cols[5] || '';
-                  item.matchCooler = cols[6] || '';
-                } else if (catKey === 'motherboard') {
-                  item.socket = cols[3] || '';
-                  item.matchMem = cols[7] || '';
-                } else if (catKey === 'memory') {
-                  item.spec = cols[8] || '';
-                } else if (catKey === 'gpu') {
-                  item.power = Number(cols[9]) || 0;
-                } else if (catKey === 'cooler') {
-                  item.coolingTdp = Number(cols[10]) || 0;
-                } else if (catKey === 'power') {
-                  item.watt = Number(cols[11]) || 0;
-                }
-
-                parts[catKey].push(item);
-                importCount++;
-              });
-
-              importTip.value = `导入成功！共导入 ${importCount} 条配件，请点击「保存修改」同步到服务器`;
-              e.target.value = '';
-            } catch (err) {
-              console.error(err);
-              alert('导入失败，请检查CSV格式是否正确');
+          // 散热器：选中CPU后自动过滤兼容型号（支持多值匹配）
+          if (key === 'cooler' && selectedItems.cpu) {
+            const cpu = selectedItems.cpu;
+            // 优先级1：手动多值匹配（英文逗号分隔）
+            if (cpu.matchCooler && cpu.matchCooler.trim()) {
+              // 分割为数组并去除首尾空格
+              const matchNames = cpu.matchCooler.split(',').map(name => name.trim()).filter(name => name);
+              const matched = list.filter(item => matchNames.includes(item.name.trim()));
+              // 只要有匹配结果就用手动匹配的列表
+              if (matched.length > 0) list = matched;
+            } 
+            // 优先级2：按散热能力 ≥ CPU TDP 自动过滤（兜底）
+            else if (cpu.tdp) {
+              list = list.filter(item => (item.coolingTdp || 0) >= cpu.tdp);
             }
-          };
-          reader.readAsText(file, 'UTF-8');
+          }
+
+          // 内存：选中主板后按规格过滤
+          if (key === 'memory' && selectedItems.motherboard?.matchMem) {
+            const spec = selectedItems.motherboard.matchMem.toUpperCase().trim();
+            list = list.filter(item => 
+              item.spec && item.spec.toUpperCase().trim() === spec
+            );
+          }
+
+          // 关键词搜索过滤
+          const keyword = searchKeywords[key].toLowerCase().trim();
+          if (!keyword) return list;
+          return list.filter(item => item.name.toLowerCase().includes(keyword));
         };
 
-        // ========== 用户管理：加载列表 ==========
-        const loadUsers = async () => {
-          try {
-            const res = await fetch(`${API_BASE}/api/users`, {
-              headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
-            });
-            const data = await res.json();
-            if (Array.isArray(data)) {
-              userList.value = data;
+        // ========== 核心：三级联动自动匹配 ==========
+        // CPU变化时自动匹配主板和散热器
+        watch(() => selectedItems.cpu, (newCpu) => {
+          if (!newCpu) return;
+          const mbList = partsData.motherboard || [];
+          if (mbList.length === 0) return;
+
+          // 自动匹配主板
+          if (newCpu.matchMb && newCpu.matchMb.trim()) {
+            const target = mbList.find(mb => mb.name.trim() === newCpu.matchMb.trim());
+            if (target) {
+              selectedItems.motherboard = target;
             }
-          } catch (e) {
-            saveError.value = '用户列表加载失败';
-          }
-        };
-
-        // ========== 用户管理：新增账号 ==========
-        const addUser = async () => {
-          if (!newUser.username || !newUser.password) {
-            alert('请填写用户名和密码');
-            return;
-          }
-          try {
-            const res = await fetch(`${API_BASE}/api/register`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${ADMIN_TOKEN}`
-              },
-              body: JSON.stringify({
-                username: newUser.username,
-                password: newUser.password
-              })
-            });
-            const data = await res.json();
-            if (data.success) {
-              newUser.username = '';
-              newUser.password = '';
-              loadUsers();
-              saveSuccess.value = true;
-              setTimeout(() => saveSuccess.value = false, 2000);
-            } else {
-              alert(data.message || '新增失败');
-            }
-          } catch (e) {
-            alert('网络错误，新增失败');
-          }
-        };
-
-        // ========== 用户管理：删除账号 ==========
-        const deleteUser = async (username) => {
-          if (!confirm(`确定删除用户「${username}」吗？`)) return;
-          try {
-            const res = await fetch(`${API_BASE}/api/user?username=${encodeURIComponent(username)}`, {
-              method: 'DELETE',
-              headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
-            });
-            const data = await res.json();
-            if (data.success) {
-              loadUsers();
-              saveSuccess.value = true;
-              setTimeout(() => saveSuccess.value = false, 2000);
-            } else {
-              alert(data.message || '删除失败');
-            }
-          } catch (e) {
-            alert('网络错误，删除失败');
-          }
-        };
-
-        // ========== 初始化 ==========
-        onMounted(() => {
-          if (localStorage.getItem('admin_token') === ADMIN_TOKEN) {
-            isLoggedIn.value = true;
-            loadParts();
-            loadUsers();
-          }
-        });
-
-        return {
-          isLoggedIn, activeTab, adminPassword, loginError,
-          saveError, saveSuccess, importTip,
-          handleLogin, handleLogout,
-          parts, loadParts, saveParts, addPart, deletePart, resetParts,
-          downloadTemplate, handleImport, exportCsv,
-          userList, newUser, loadUsers, addUser, deleteUser
-        };
-      }
-    }).mount('#app');
-  </script>
-</body>
-</html>
+          } else if (newCpu.socket) {
+            const matched = mbList.find(mb => mb.socket === newCpu.socket);
+            if (matched
