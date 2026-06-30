@@ -286,7 +286,9 @@
             const data = await res.json();
             if (data.success) {
               isLoggedIn.value = true;
-              localStorage.setItem('quote_token', data.token);
+              // 会话级存储：关闭标签页/浏览器自动清除
+              sessionStorage.setItem('quote_token', data.token);
+              loadPartsData();
             } else {
               loginError.value = data.message || '登录失败';
             }
@@ -299,7 +301,7 @@
 
         const handleLogout = () => {
           isLoggedIn.value = false;
-          localStorage.removeItem('quote_token');
+          sessionStorage.removeItem('quote_token');
           loginUsername.value = '';
           loginPassword.value = '';
         };
@@ -390,137 +392,93 @@
           return list.filter(item => item.name.toLowerCase().includes(keyword));
         };
 
-        // ========== 核心：三级联动匹配规则（手动优先 > 自动匹配） ==========
-        // 1. CPU 匹配主板
-        const matchMotherboard = (cpuItem) => {
-          const mbList = partsData.motherboard || [];
-          if (!cpuItem || mbList.length === 0) return;
-
-          // --- 优先级1：手动填写的匹配规则（名称完全一致） ---
-          if (cpuItem.matchMb && cpuItem.matchMb.trim()) {
-            const targetName = cpuItem.matchMb.trim();
-            const matched = mbList.find(mb => mb.name.trim() === targetName);
-            if (matched) {
-              selectedItems.motherboard = matched;
-              return; // 手动匹配成功，终止后续自动匹配
-            }
-          }
-
-          // --- 优先级2：代际自动匹配（兜底） ---
-          const cpuName = cpuItem.name;
-          const genMatch = cpuName.match(/-(\d{1,2})\d{3}/);
-          if (!genMatch) return;
-          const gen = parseInt(genMatch[1]);
-
-          let defaultChipset = '';
-          if (gen === 2) defaultChipset = 'H61';
-          else if (gen === 4 || gen === 5) defaultChipset = 'B85';
-          else if (gen === 6 || gen === 7) defaultChipset = 'B150';
-          else if (gen === 8 || gen === 9) defaultChipset = 'H310';
-          else if (gen === 10) defaultChipset = 'H410';
-          else if (gen === 11) defaultChipset = 'H510';
-          else if (gen === 12) defaultChipset = 'H610';
-          else if (gen === 13 || gen === 14) defaultChipset = 'B660';
-
-          if (!defaultChipset) return;
-          const matchedMb = mbList.find(item => 
-            item.name.toUpperCase().includes(defaultChipset.toUpperCase())
-          );
-          if (matchedMb) {
-            selectedItems.motherboard = matchedMb;
-          }
-        };
-
-        // 2. 主板 匹配内存
-        const matchMemory = (mbItem) => {
-          const memList = partsData.memory || [];
-          if (!mbItem || memList.length === 0) return;
-
-          // 按手动填写的规格筛选并默认选中第一款
-          if (mbItem.matchMem && mbItem.matchMem.trim()) {
-            const spec = mbItem.matchMem.toUpperCase().trim();
-            const filtered = memList.filter(item => 
-              item.spec && item.spec.toUpperCase().trim() === spec
-            );
-            selectedItems.memory = filtered.length > 0 ? filtered[0] : null;
-          }
-        };
-
-        // 3. CPU 匹配散热器
-        const matchCooler = (cpuItem) => {
-          const coolerList = partsData.cooler || [];
-          if (!cpuItem || coolerList.length === 0) return;
-
-          // 优先级1：手动填写的匹配规则
-          if (cpuItem.matchCooler && cpuItem.matchCooler.trim()) {
-            const targetName = cpuItem.matchCooler.trim();
-            const matched = coolerList.find(item => item.name.trim() === targetName);
-            if (matched) {
-              selectedItems.cooler = matched;
-              return; // 手动匹配成功，终止自动匹配
-            }
-          }
-
-          // 优先级2：按型号规则自动匹配
-          const cpuName = cpuItem.name;
-          let targetType = '';
-          if (cpuName.includes('i7') || cpuName.toUpperCase().includes('KF')) {
-            targetType = '6热管';
-          } else if (cpuName.includes('i5')) {
-            targetType = '4热管';
-          }
-
-          if (!targetType) return;
-          const matchedCooler = coolerList.find(item => item.name.includes(targetType));
-          if (matchedCooler) {
-            selectedItems.cooler = matchedCooler;
-          }
-        };
-
-        // 监听联动：CPU变化 → 自动匹配主板+散热器
+        // ========== 核心：三级联动自动匹配 ==========
+        // CPU变化时自动匹配主板
         watch(() => selectedItems.cpu, (newCpu) => {
-          if (newCpu) {
-            matchMotherboard(newCpu);
-            matchCooler(newCpu);
+          if (!newCpu) return;
+          const mbList = partsData.motherboard || [];
+          if (mbList.length === 0) return;
+
+          // 优先级1：手动匹配名称
+          if (newCpu.matchMb && newCpu.matchMb.trim()) {
+            const target = mbList.find(mb => mb.name.trim() === newCpu.matchMb.trim());
+            if (target) {
+              selectedItems.motherboard = target;
+              return;
+            }
+          }
+          // 优先级2：插槽自动匹配（取同插槽第一个）
+          if (newCpu.socket) {
+            const matched = mbList.find(mb => mb.socket === newCpu.socket);
+            if (matched) selectedItems.motherboard = matched;
+          }
+
+          // 同时自动匹配散热器
+          const coolerList = partsData.cooler || [];
+          if (newCpu.matchCooler && newCpu.matchCooler.trim()) {
+            const target = coolerList.find(c => c.name.trim() === newCpu.matchCooler.trim());
+            if (target) {
+              selectedItems.cooler = target;
+              return;
+            }
+          }
+          if (newCpu.tdp) {
+            const matched = coolerList.find(c => (c.coolingTdp || 0) >= newCpu.tdp);
+            if (matched) selectedItems.cooler = matched;
           }
         });
 
-        // 监听联动：主板变化 → 自动匹配内存
+        // 主板变化时自动匹配内存
         watch(() => selectedItems.motherboard, (newMb) => {
-          if (newMb) {
-            matchMemory(newMb);
-          }
+          if (!newMb || !newMb.matchMem) return;
+          const memList = partsData.memory || [];
+          const spec = newMb.matchMem.toUpperCase().trim();
+          const matched = memList.find(m => m.spec && m.spec.toUpperCase().trim() === spec);
+          if (matched) selectedItems.memory = matched;
         });
 
-        // ========== 计算属性 ==========
-        const totalCost = computed(() => {
-          return categories.reduce((sum, cat) => {
-            return sum + (selectedItems[cat.key]?.cost || 0);
-          }, 0);
-        });
-
-        const totalPower = computed(() => {
-          return categories.reduce((sum, cat) => {
-            const item = selectedItems[cat.key];
-            return sum + (item?.power || item?.tdp || item?.watt || 0);
-          }, 0);
-        });
-
+        // ========== 必选项校验 ==========
         const missingRequired = computed(() => {
-          return categories.filter(cat => cat.required && !selectedItems[cat.key]);
+          return categories.filter(c => c.required && !selectedItems[c.key]);
         });
 
+        // ========== 总功耗计算 ==========
+        const totalPower = computed(() => {
+          let power = 0;
+          if (selectedItems.cpu?.tdp) power += selectedItems.cpu.tdp;
+          if (selectedItems.gpu?.power) power += selectedItems.gpu.power;
+          power += 80; // 主板、内存、硬盘等基础功耗
+          return power;
+        });
+
+        // ========== 总成本计算 ==========
+        const totalCost = computed(() => {
+          let cost = 0;
+          categories.forEach(cat => {
+            if (selectedItems[cat.key]) {
+              cost += Number(selectedItems[cat.key].cost) || 0;
+            }
+          });
+          return cost;
+        });
+
+        // ========== 多期定价公式（已按规则修正） ==========
+        // 6期：总成本 / 15
         const price6 = computed(() => Math.round(totalCost.value / 15));
-        const price12 = computed(() => Math.round(totalCost.value / 15.8));
+        // 12期：6期价格 × 0.95
+        const price12 = computed(() => Math.round(price6.value * 0.95));
+        // 12期租满送：(总成本 × 1.5) / 12
         const price12Send = computed(() => Math.round((totalCost.value * 1.5) / 12));
+        // 24期租满送：(总成本 × 1.8) / 24
         const price24Send = computed(() => Math.round((totalCost.value * 1.8) / 24));
 
+        // ========== 日期格式化 ==========
         const today = computed(() => {
           const d = new Date();
-          return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
         });
 
-        // ========== 操作函数 ==========
+        // ========== 提交报价 ==========
         const generateQuote = () => {
           if (missingRequired.value.length > 0) {
             showMissingTip.value = true;
@@ -530,43 +488,34 @@
           showQuoteModal.value = true;
         };
 
+        // ========== 重置配置 ==========
         const resetConfig = () => {
-          categories.forEach(c => selectedItems[c.key] = null);
-          activeDropdown.value = null;
-          showQuoteModal.value = false;
+          if (!confirm('确定重置所有已选配置吗？')) return;
+          Object.keys(selectedItems).forEach(key => delete selectedItems[key]);
           showMissingTip.value = false;
+          showQuoteModal.value = false;
         };
 
-        // 保存报价单为图片
+        // ========== 保存为图片 ==========
         const saveAsImage = async () => {
-          const element = document.getElementById('quoteCard');
           try {
-            // 等待DOM完全渲染
-            await nextTick();
-            const canvas = await html2canvas(element, {
-              backgroundColor: '#ffffff',
+            const el = document.getElementById('quoteCard');
+            const canvas = await html2canvas(el, {
               scale: 2,
               useCORS: true,
-              logging: false
+              backgroundColor: '#ffffff'
             });
             const link = document.createElement('a');
-            link.download = `电脑租赁报价单_${today.value}.png`;
+            link.download = `DIY电脑租赁报价_${today.value}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
           } catch (e) {
-            alert('图片生成失败，请重试');
-            console.error(e);
+            alert('保存图片失败，请重试');
           }
         };
 
-        // ========== 初始化加载数据 ==========
-        onMounted(async () => {
-          // 检查本地登录状态
-          if (localStorage.getItem('quote_token')) {
-            isLoggedIn.value = true;
-          }
-
-          // 加载配件数据
+        // ========== 加载配件数据 ==========
+        const loadPartsData = async () => {
           try {
             const res = await fetch(`${API_BASE}/api/data`);
             const data = await res.json();
@@ -574,7 +523,16 @@
               Object.assign(partsData, data.parts);
             }
           } catch (e) {
-            console.error('加载配件数据失败', e);
+            console.error('配件数据加载失败', e);
+          }
+        };
+
+        // ========== 初始化 ==========
+        onMounted(() => {
+          // 从会话存储读取登录状态
+          if (sessionStorage.getItem('quote_token')) {
+            isLoggedIn.value = true;
+            loadPartsData();
           }
         });
 
@@ -583,9 +541,9 @@
           handleLogin, handleLogout,
           categories, selectedItems, activeDropdown, searchKeywords,
           filteredParts, toggleDropdown, selectItem,
-          totalCost, totalPower, missingRequired,
+          missingRequired, showMissingTip, totalPower,
           price6, price12, price12Send, price24Send, today,
-          showQuoteModal, showMissingTip, generateQuote, resetConfig, saveAsImage
+          showQuoteModal, generateQuote, resetConfig, saveAsImage
         };
       }
     }).mount('#app');
