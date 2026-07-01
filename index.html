@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DIY电脑租赁报价</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <!-- 报价单转图片依赖库 -->
   <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -255,7 +254,6 @@
 
   <script>
     const { createApp, reactive, computed, onMounted, ref, watch } = Vue;
-    // ====== 接口地址，和你后台保持一致 ======
     const API_BASE = "https://api.xszd.cc.cd";
 
     createApp({
@@ -286,7 +284,6 @@
             const data = await res.json();
             if (data.success) {
               isLoggedIn.value = true;
-              // 会话级存储：关闭标签页/浏览器自动清除
               sessionStorage.setItem('quote_token', data.token);
               loadPartsData();
             } else {
@@ -337,47 +334,50 @@
           searchKeywords[key] = '';
         };
 
-        // 选中配件
         const selectItem = (key, item) => {
           selectedItems[key] = item;
           activeDropdown.value = null;
           searchKeywords[key] = '';
         };
 
-        // 配件过滤（含主板、散热器、内存三级联动过滤，散热器支持多值匹配）
+        // ========== 工具：判断CPU是否为无核显F结尾型号 ==========
+        const isCpuNoIGPU = () => {
+          if (!selectedItems.cpu) return false;
+          const cpuName = selectedItems.cpu.name.trim().toUpperCase();
+          return cpuName.endsWith('F');
+        };
+
+        // ========== 配件过滤（三级联动 + 散热器多值匹配 + 无核显CPU禁选核显显卡） ==========
         const filteredParts = (key) => {
           let list = partsData[key] || [];
           
           // 主板：选中CPU后自动过滤兼容款
           if (key === 'motherboard' && selectedItems.cpu) {
             const cpu = selectedItems.cpu;
-            // 优先级1：手动精确匹配主板名称
             if (cpu.matchMb && cpu.matchMb.trim()) {
               const targetName = cpu.matchMb.trim();
               const matched = list.filter(item => item.name.trim() === targetName);
               if (matched.length > 0) list = matched;
-            } 
-            // 优先级2：按相同插槽自动兼容过滤
-            else if (cpu.socket) {
+            } else if (cpu.socket) {
               list = list.filter(item => item.socket === cpu.socket);
             }
           }
 
-          // 散热器：选中CPU后自动过滤兼容型号（支持多值匹配）
+          // 散热器：选中CPU后自动过滤（支持多值逗号分隔）
           if (key === 'cooler' && selectedItems.cpu) {
             const cpu = selectedItems.cpu;
-            // 优先级1：手动多值匹配（英文逗号分隔）
             if (cpu.matchCooler && cpu.matchCooler.trim()) {
-              // 分割为数组并去除首尾空格
               const matchNames = cpu.matchCooler.split(',').map(name => name.trim()).filter(name => name);
               const matched = list.filter(item => matchNames.includes(item.name.trim()));
-              // 只要有匹配结果就用手动匹配的列表
               if (matched.length > 0) list = matched;
-            } 
-            // 优先级2：按散热能力 ≥ CPU TDP 自动过滤（兜底）
-            else if (cpu.tdp) {
+            } else if (cpu.tdp) {
               list = list.filter(item => (item.coolingTdp || 0) >= cpu.tdp);
             }
+          }
+
+          // 显卡：F结尾无核显CPU，过滤掉所有核显选项
+          if (key === 'gpu' && isCpuNoIGPU()) {
+            list = list.filter(item => !item.name.includes('核显'));
           }
 
           // 内存：选中主板后按规格过滤
@@ -388,14 +388,13 @@
             );
           }
 
-          // 关键词搜索过滤
+          // 关键词搜索
           const keyword = searchKeywords[key].toLowerCase().trim();
           if (!keyword) return list;
           return list.filter(item => item.name.toLowerCase().includes(keyword));
         };
 
-        // ========== 核心：三级联动自动匹配 ==========
-        // CPU变化时自动匹配主板和散热器
+        // ========== 三级联动自动选中 ==========
         watch(() => selectedItems.cpu, (newCpu) => {
           if (!newCpu) return;
           const mbList = partsData.motherboard || [];
@@ -410,22 +409,25 @@
             if (matched) selectedItems.motherboard = matched;
           }
 
-          // 自动匹配散热器（多值时默认选中第一个）
+          // 自动匹配散热器（多值时默认选第一个）
           if (newCpu.matchCooler && newCpu.matchCooler.trim()) {
             const firstMatch = newCpu.matchCooler.split(',')[0].trim();
             const target = coolerList.find(c => c.name.trim() === firstMatch);
             if (target) {
               selectedItems.cooler = target;
-              return;
             }
-          }
-          if (newCpu.tdp) {
+          } else if (newCpu.tdp) {
             const matched = coolerList.find(c => (c.coolingTdp || 0) >= newCpu.tdp);
             if (matched) selectedItems.cooler = matched;
           }
+
+          // 防呆：F结尾CPU自动清空已选的核显显卡
+          if (isCpuNoIGPU() && selectedItems.gpu && selectedItems.gpu.name.includes('核显')) {
+            delete selectedItems.gpu;
+          }
         });
 
-        // 主板变化时自动匹配内存
+        // 主板变化自动匹配内存
         watch(() => selectedItems.motherboard, (newMb) => {
           if (!newMb || !newMb.matchMem) return;
           const memList = partsData.memory || [];
@@ -439,12 +441,18 @@
           return categories.filter(c => c.required && !selectedItems[c.key]);
         });
 
-        // ========== 总功耗计算 ==========
+        // ========== 总功耗计算（修复：未选CPU时不计入基础功耗） ==========
         const totalPower = computed(() => {
           let power = 0;
-          if (selectedItems.cpu?.tdp) power += selectedItems.cpu.tdp;
-          if (selectedItems.gpu?.power) power += selectedItems.gpu.power;
-          power += 80; // 主板、内存、硬盘等基础功耗
+          // 只有选中CPU后，才计入CPU自身功耗 + 平台基础功耗
+          if (selectedItems.cpu?.tdp) {
+            power += selectedItems.cpu.tdp;
+            power += 80; // 主板、内存、硬盘等平台基础功耗
+          }
+          // 显卡功耗单独叠加
+          if (selectedItems.gpu?.power) {
+            power += selectedItems.gpu.power;
+          }
           return power;
         });
 
@@ -526,7 +534,6 @@
 
         // ========== 初始化 ==========
         onMounted(() => {
-          // 从会话存储读取登录状态
           if (sessionStorage.getItem('quote_token')) {
             isLoggedIn.value = true;
             loadPartsData();
